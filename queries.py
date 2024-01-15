@@ -65,9 +65,6 @@ def get_historic(connection, params):
         print(traceback.format_exc())
         return 'Something went wrong', 500
 
-# UPLOAD DATA FUNCTION
-def upload_file(connection, file):
-    print(file)
-    # response = requests.post('http://127.0.0.1:5000/api/upload-file', files={'file': file})
-    # output = response.json()
-    # return output
+## GET PREDICTION
+def get_prediction_data(connection, date):
+    print("Predicting...")

@@ -1,6 +1,6 @@
 from keras.models import load_model
 from PIL import Image
-from queries import predict
+from queries import get_prediction_data
 
 import altair as alt
 import mysql.connector
@@ -49,7 +49,7 @@ def main():
 
     date = col2.date_input('Fecha', value=None, min_value=None, max_value=None, key=None, help=None)
     if col2.button('Predecir', type="primary"):
-        prediction = predict(mysql, model, date)
+        prediction = get_prediction_data(mysql, date)
         st.write(f'La predicción de producción de balanceado de camarón para el día {date} es de {prediction} toneladas.')
 
 if __name__ == "__main__":
