@@ -1,0 +1,29 @@
+div[data-testid="stSidebarUserContent"] {
+    padding: 3rem 1.5rem;
+}
+
+div[data-testid="stHorizontalBlock"] {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+div[data-testid="stTooltipIcon"] {
+    display: block;
+}
+
+button[data-testid="baseButton-primary"] {
+    border: none;
+    width: 100%;
+    background-color: #F99448;
+}
+
+button[data-testid="baseButton-secondary"] {
+    width: 100%;
+}
+
+button[data-testid="baseButton-secondaryFormSubmit"] {
+    border: none;
+    width: 100%;
+    background-color: #F99448;
+}
