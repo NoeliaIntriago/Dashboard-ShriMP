@@ -10,7 +10,7 @@ import toml
 import mysql.connector
 
 path = os.path.dirname(__file__)
-toml_data = toml.load(path + '/../.streamlit/secrets.toml')
+toml_data = toml.load(path + '/.streamlit/secrets.toml')
 
 HOST = toml_data['mysql']['host']
 DATABASE = toml_data['mysql']['database']
@@ -105,10 +105,10 @@ def draw_results(input_data):
 def main():
     st.set_page_config(page_title='ShriMP Dashboard', layout="wide", page_icon=':shrimp:')
 
-    with open(path+"/../style/style.css") as f:
+    with open(path+"/style/style.css") as f:
         st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
-    logo = Image.open(path +"/../images/logo_ai.png")
+    logo = Image.open(path +"/images/logo_ai.png")
     col1, col2 = st.columns([0.5, 2])
     col1.image(logo, width=175)
     col2.title("ShriMP Dashboard")
