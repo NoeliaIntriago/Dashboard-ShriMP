@@ -5,6 +5,7 @@ from queries import get_clients, get_min_max_date, get_prediction_data
 from sklearn.preprocessing import MinMaxScaler
 
 import altair as alt
+import io
 import mysql.connector
 import os
 import pandas as pd
@@ -134,11 +135,15 @@ def build_week_charts(df, num_week):
 
 @st.cache_resource
 def write_excel(df1, df2, df3, df4, date):
-    with pd.ExcelWriter(f'prediction-{date}.xlsx') as writer:
-        df1.to_excel(writer, sheet_name='Semana 1')
-        df2.to_excel(writer, sheet_name='Semana 2')
-        df3.to_excel(writer, sheet_name='Semana 3')
-        df4.to_excel(writer, sheet_name='Semana 4')
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df1.to_excel(writer, sheet_name=f'Semana 1 ({date})')
+        df2.to_excel(writer, sheet_name=f'Semana 2 ({date + timedelta(weeks=1)})')
+        df3.to_excel(writer, sheet_name=f'Semana 3 ({date + timedelta(weeks=2)})')
+        df4.to_excel(writer, sheet_name=f'Semana 4 ({date + timedelta(weeks=3)})')
+    
+    processed_data = output.getvalue()
+    return processed_data
 
 def main():
     st.set_page_config(page_title='ShriMP Prediction', layout="wide", page_icon=':shrimp:')
@@ -204,8 +209,13 @@ def main():
         week4 = build_week_dataframes(week4)
         build_week_charts(week4, 4)
 
-        col2.button('Descargar predicción', on_click=write_excel(week1, week2, week3, week4, date))
-
+        excel = write_excel(week1, week2, week3, week4, date)
+        col2.download_button(
+            'Descargar Reporte Excel',
+            data=excel,
+            file_name=f"reporte_prediccion_{date}.xlsx",
+            mime='application/vnd.ms-excel'
+        )
 
 if __name__ == "__main__":
     main()
