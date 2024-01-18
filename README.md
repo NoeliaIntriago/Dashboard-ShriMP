@@ -23,6 +23,6 @@ Install required packages for the project inside venv:
 ## App
 
 ```
-    streamlit run dashboard.py
+    streamlit run 0_📊_Dashboard.py
 ```
 
