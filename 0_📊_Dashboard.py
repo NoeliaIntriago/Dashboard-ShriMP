@@ -66,9 +66,10 @@ def draw_results(input_data):
         ), use_container_width=True)
 
     with col2:
+        top_6_etapa = dataframe.groupby(['Etapa', 'Producto'])['Toneladas'].sum().reset_index().sort_values(by="Toneladas", ascending=False).head(6)
         fig = px.sunburst(
                 data_frame=dataframe,
-                path=[dataframe['Etapa'], dataframe['Producto']],
+                path=[top_6_etapa['Etapa'], top_6_etapa['Producto']],
                 color_discrete_sequence=px.colors.qualitative.Alphabet,
             )
         st.plotly_chart(fig, use_container_width=True)
@@ -84,9 +85,10 @@ def draw_results(input_data):
         ), use_container_width=True)
 
     with col2:
+        top_6_clientes = dataframe.groupby(['Cliente', 'Producto'])['Toneladas'].sum().reset_index().sort_values(by="Toneladas", ascending=False).head(6)
         fig = px.sunburst(
                 data_frame=dataframe,
-                path=[dataframe['Cliente'], dataframe['Producto']],
+                path=[top_6_clientes['Cliente'], top_6_clientes['Producto']],
                 color_discrete_sequence=px.colors.qualitative.Pastel,
             )
         st.plotly_chart(fig, use_container_width=True)

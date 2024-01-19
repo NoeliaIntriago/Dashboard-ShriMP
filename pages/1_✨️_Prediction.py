@@ -22,9 +22,8 @@ PASSWORD = toml_data['mysql']['password']
 PORT = toml_data['mysql']['port']
 
 mysql = mysql.connector.connect(host=HOST, database=DATABASE, user=USER, password=PASSWORD, port=PORT)
-model = load_model(path + '/../model/model_lstm_all_76_8.h5')
+model = load_model(path + '/../model/model_checkpoints/model_lstm_all_76_8.h5')
 
-@st.cache_data
 def predict(result):
     columns_order = [
         'AUR_SEEDING_1', 'AUR_VOLUMA_1', 'TAR_SEEDING_1', 'JIN_SEEDING_1', 'ZEP_VOLUMA_1', 'JIN_VOLUMA_1', 'VEX_VOLUMA_1', 'NYX_SEEDING_1', 'NYX_VOLUMA_1', 'LEX_VOLUMA_1', 'NICOVITA_1', 'POTENCIAL_GRUPO_1', 'SOW_MAX_ALCANZABLE_1',
@@ -106,7 +105,6 @@ def predict(result):
     
     return prediction, columns_out
 
-@st.cache_data
 def build_week_dataframes(df):
     clientes = get_clients(mysql)[0]
     mapeo_clientes = {i+1: nombre for i, nombre in enumerate(clientes)}
@@ -133,7 +131,6 @@ def build_week_charts(df, num_week):
         title=f"Predicción de producción de balanceado de camarón para la semana {num_week}"
     ), use_container_width=True)
 
-@st.cache_resource
 def write_excel(df1, df2, df3, df4, date):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -144,6 +141,7 @@ def write_excel(df1, df2, df3, df4, date):
     
     processed_data = output.getvalue()
     return processed_data
+
 
 def main():
     st.set_page_config(page_title='ShriMP Prediction', layout="wide", page_icon=':shrimp:')
@@ -166,6 +164,8 @@ def main():
         La predicción mostrará la producción de balanceado de camarón para las siguientes 4 semanas a partir de la fecha seleccionada.
     ''')
 
+    st.divider()
+
     col1, col2 = st.columns([1, 1])
     col1.subheader('Predicción de producción de balanceado de camarón')
     col1.write('''
@@ -180,11 +180,9 @@ def main():
 
         if predict_button and date is not None:
             prediction_data = get_prediction_data(mysql, date)
-        
+
         elif predict_button and date is None:
             st.write('Por favor seleccione una fecha.')
-
-    st.divider()
 
     if prediction_data is not None:
         model_prediction, columns_out = predict(prediction_data)
@@ -216,6 +214,7 @@ def main():
             file_name=f"reporte_prediccion_{date}.xlsx",
             mime='application/vnd.ms-excel'
         )
+
 
 if __name__ == "__main__":
     main()

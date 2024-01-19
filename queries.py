@@ -105,8 +105,8 @@ def get_prediction_data(connection, date):
         merged_data = pd.merge(merged_data, dataframe_precios_camaron, on='FECHA', how='left')
 
         merged_data = merged_data.set_index('FECHA')
-        return merged_data, 200
 
+        return merged_data, 200
         
     except Exception as e:
         print(traceback.format_exc())
@@ -143,6 +143,15 @@ def get_materia_prima_for_prediction(cursor, fecha_desde, fecha_hasta):
 
 ## GET SOW INFORMATION FOR PREDICTION
 def get_sow_for_prediction(cursor, fecha_desde, fecha_hasta):
+    columnas = ['NICOVITA', 'POTENCIAL_GRUPO', 'SOW_MAX_ALCANZABLE']
+    clientes = range(1, 8)
+
+    columnas_esperadas = [f'{column}_{cliente}' for cliente in clientes for column in columnas]
+    columnas_esperadas.insert(0, 'FECHA')
+    columnas_esperadas.insert(1, 'COD_CLIENTE')
+    dataframe_esperado = pd.DataFrame(columns=columnas_esperadas)
+
+    # CONSTRUCCIÓN DE DATAFRAME CON DATA DE SOW
     cursor.execute(f'''
         SELECT 
             fecha_periodo as fecha,
@@ -162,9 +171,9 @@ def get_sow_for_prediction(cursor, fecha_desde, fecha_hasta):
     dataframe_sow = pd.DataFrame(data_sow, columns=columns_sow)
     dataframe_sow.columns = [column.upper() for column in dataframe_sow.columns.values]
     dataframe_sow['MES'] = pd.to_datetime(dataframe_sow['FECHA']).dt.month
-
-    dataframe_sow = dataframe_sow.groupby(['MES', 'COD_CLIENTE']).agg({'POTENCIAL_GRUPO': 'sum', 'NICOVITA': 'mean', 'SOW_MAX_ALCANZABLE': 'mean'}).reset_index()
-    dataframe_sow = dataframe_sow.pivot_table(index=['MES'], columns='COD_CLIENTE', values=['POTENCIAL_GRUPO', 'NICOVITA', 'SOW_MAX_ALCANZABLE'], aggfunc='first').fillna(0)
+    
+    dataframe_sow = dataframe_sow.groupby(['FECHA', 'COD_CLIENTE']).agg({'POTENCIAL_GRUPO': 'sum', 'NICOVITA': 'mean', 'SOW_MAX_ALCANZABLE': 'mean'}).reset_index()
+    dataframe_sow = dataframe_sow.pivot_table(index=['FECHA'], columns='COD_CLIENTE', values=['POTENCIAL_GRUPO', 'NICOVITA', 'SOW_MAX_ALCANZABLE'], aggfunc='first').fillna(0)
     new_columns = {}
     for column in dataframe_sow.columns:
         if 'NICOVITA' in column:
@@ -178,7 +187,16 @@ def get_sow_for_prediction(cursor, fecha_desde, fecha_hasta):
     dataframe_sow.columns = [f'{column[0]}_{column[1][-1]}' for column in dataframe_sow.columns.values]
     dataframe_sow = dataframe_sow.reset_index()
 
-    return dataframe_sow
+    # LÓGICA PARA LLENAR DATAFRAME VACÍO CON DATA DE SOW
+    dataframe_sow = dataframe_sow.reindex(columns=columnas_esperadas, fill_value=0)
+    df_resultado = pd.concat([dataframe_esperado, dataframe_sow])
+    df_resultado.fillna(0, inplace=True)
+    df_resultado['MES'] = pd.to_datetime(df_resultado['FECHA']).dt.month
+
+    df_resultado = df_resultado.drop(['FECHA'], axis=1)
+    df_resultado = df_resultado.drop(['COD_CLIENTE'], axis=1)
+
+    return df_resultado
 
 ## GET PRECIOS CAMARÓN FOR PREDICTION
 def get_precios_camaron_for_prediction(cursor, fecha_desde, fecha_hasta):
@@ -296,3 +314,157 @@ def get_ventas_for_prediction(cursor, fecha_desde, fecha_hasta):
     df_resultado['MES'] = pd.to_datetime(df_resultado['FECHA']).dt.month
 
     return df_resultado
+
+## CHECK IF CLIENT EXISTS
+def check_client_exists(cursor, cod_znje, des_znje):
+    cursor.execute(f"SELECT id_cliente FROM cliente WHERE cod_cliente = '{cod_znje}'")
+    id_cliente = cursor.fetchone()
+
+    if id_cliente is None:
+        cursor.execute("INSERT INTO cliente (cod_cliente, des_cliente) VALUES (%s, %s)", (cod_znje, des_znje))
+        cursor.execute("SELECT id_cliente FROM cliente WHERE cod_cliente = %s", (cod_znje,))
+        id_cliente = cursor.fetchone()
+    
+    return id_cliente[0]
+
+## CHECK IF PRODUCT EXISTS
+def check_product_exists(cursor, cod_sku, des_sku, porcentaje_proteina, val_formato, familia, grupo_linea, familia_linea):
+    cursor.execute(f"SELECT id_producto FROM producto WHERE cod_sku = '{cod_sku}'")
+    id_producto = cursor.fetchone()
+
+    if id_producto is None:
+        porcentaje_proteina = float(porcentaje_proteina.replace('%', '')) / 100
+        cursor.execute(f'''
+            INSERT INTO producto (cod_sku, des_sku, porcentaje_proteina, val_formato, familia, grupo_linea, familia_linea) 
+            VALUES ('{cod_sku}', '{des_sku}', '{porcentaje_proteina}', '{val_formato}', '{familia}', '{grupo_linea}', '{familia_linea}')
+        ''')
+        cursor.execute(f"SELECT id_producto FROM producto WHERE cod_sku = '{cod_sku}'")
+        id_producto = cursor.fetchone()
+    
+    return id_producto[0]
+
+## UPLOAD VENTAS DATA
+def upload_ventas_data(connection, data):
+    try:
+        data_ventas = pd.DataFrame(pd.read_excel(data))
+        cursor = connection.cursor()
+
+        for index, row in data_ventas.iterrows():
+            id_cliente = check_client_exists(cursor, row['COD_ZNJE'], row['DES_ZNJE'])
+            id_producto = check_product_exists(cursor, row['COD_SKU'], row['DES_SKU'], row['PORC_PROTEINA'], row['VAL_FORMATO'], row['DES_FAMILIA'], row['DES_GRUPO_LINEA'], row['DES_FAMILIA'] + '_' + row['DES_LINEA'])
+
+            fecha = datetime.strptime(row['FEC_EMISION'], '%d/%m/%Y').strftime('%Y-%m-%d')
+            toneladas = row['TOT_PESO_FACTURADO']
+            
+            insert_venta = f'''
+                INSERT INTO venta (id_cliente, id_producto, fecha_emision, toneladas)
+                VALUES ('{id_cliente}', '{id_producto}', '{fecha}', '{toneladas}')
+            '''
+            cursor.execute(insert_venta)
+
+        cursor.execute('COMMIT')
+        cursor.close()
+
+        return 'Data uploaded successfully', 200
+    except Exception as e:
+        cursor.execute('ROLLBACK')
+        print(traceback.format_exc())
+        return 'Something went wrong', 500
+    
+## UPLOAD MATERIA PRIMA DATA
+def upload_materia_prima_data(connection, data):
+    try:
+        cursor = connection.cursor()
+
+        for row in data:
+            cursor.execute(f'''
+                INSERT INTO materia_prima (fecha, total_usd_lecitina, libras_neto_lecitina, total_usd_soya, libras_neto_soya, total_usd_trigo, libras_neto_trigo)
+                VALUES (
+                    '{row['Fecha']}',
+                    {row['Total USD Lecitina']},
+                    {row['Libras Neto Lecitina']},
+                    {row['Total USD Soya']},
+                    {row['Libras Neto Soya']},
+                    {row['Total USD Trigo']},
+                    {row['Libras Neto Trigo']}
+                )
+            ''')
+            connection.commit()
+
+        cursor.close()
+        return 'Data uploaded successfully', 200
+    except Exception as e:
+        print(traceback.format_exc())
+        return 'Something went wrong', 500
+    
+## UPLOAD PRECIOS CAMARÓN DATA
+def upload_precio_camaron_data(connection, data):
+    try:
+        cursor = connection.cursor()
+
+        for row in data:
+            cursor.execute(f'''
+                INSERT INTO precio_camaron (fecha, `30-40 (29 g)`, `40-50 (23 g)`, `50-60 (18 g)`, `60-70 (15 g)`, `70-80 (13 g)`, `80-100 (11 g)`)
+                VALUES (
+                    '{row['Fecha']}',
+                    {row['30-40 (29 g)']},
+                    {row['40-50 (23 g)']},
+                    {row['50-60 (18 g)']},
+                    {row['60-70 (15 g)']},
+                    {row['70-80 (13 g)']},
+                    {row['80-100 (11 g)']}
+                )
+            ''')
+            connection.commit()
+
+        cursor.close()
+        return 'Data uploaded successfully', 200
+    except Exception as e:
+        print(traceback.format_exc())
+        return 'Something went wrong', 500
+    
+## UPLOAD EXPORTACIONES DATA
+def upload_exportaciones_data(connection, data):
+    try:
+        cursor = connection.cursor()
+
+        for row in data:
+            cursor.execute(f'''
+                INSERT INTO exportacion (fecha, total_lb, total_fob)
+                VALUES (
+                    '{row['Fecha']}',
+                    {row['Total LB']},
+                    {row['Total FOB']}
+                )
+            ''')
+            connection.commit()
+
+        cursor.close()
+        return 'Data uploaded successfully', 200
+    except Exception as e:
+        print(traceback.format_exc())
+        return 'Something went wrong', 500
+    
+## UPLOAD SOW DATA
+def upload_sow_data(connection, data):
+    try:
+        cursor = connection.cursor()
+
+        for row in data:
+            cursor.execute(f'''
+                INSERT INTO sow (id_cliente, fecha_periodo, potencial_grupo, nicovita, sow_max_alcanzable)
+                VALUES (
+                    (SELECT id_cliente FROM cliente WHERE des_cliente = '{row['Cliente']}'),
+                    '{row['Fecha']}',
+                    {row['Potencial Grupo']},
+                    {row['Nicovita']},
+                    {row['SOW Max Alcanzable']}
+                )
+            ''')
+            connection.commit()
+
+        cursor.close()
+        return 'Data uploaded successfully', 200
+    except Exception as e:
+        print(traceback.format_exc())
+        return 'Something went wrong', 500
