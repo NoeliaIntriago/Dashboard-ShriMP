@@ -24,7 +24,7 @@ PORT = toml_data["mysql"]["port"]
 mysql = mysql.connector.connect(
     host=HOST, database=DATABASE, user=USER, password=PASSWORD, port=PORT
 )
-model = load_model(path + "/../model/model_checkpoints/model_lstm_all_76_8.h5")
+model = load_model(path + "/../model/model_lstm_all_76_8.h5")
 
 
 def predict(result):
