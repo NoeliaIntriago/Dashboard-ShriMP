@@ -9,11 +9,11 @@ path = os.path.dirname(__file__)
 def main():
     st.set_page_config(page_title="About ShriMP", layout="wide", page_icon=":shrimp:")
 
-    with open(path + "/../style/style.css") as f:
+    with open(path + "/../style/about_style.css") as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-    with open(path+"/../style/about_style.css") as f:
-        st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    with open(path + "/../style/style.css") as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
     logo = Image.open(path + "/../images/logo_ai.png")
     col1, col2 = st.columns([0.5, 2])
@@ -51,6 +51,7 @@ def main():
 
     col1, col2 = st.columns([1, 1])
     with col1:
+        st.image("https://avatars.githubusercontent.com/NoeliaIntriago", width=100)
         st.markdown(
             """
             **Noelia Intriago**  
@@ -59,6 +60,7 @@ def main():
         )
 
     with col2:
+        st.image("https://avatars.githubusercontent.com/danielandeta", width=100)
         st.markdown(
             """
             **Daniela Landeta**  
