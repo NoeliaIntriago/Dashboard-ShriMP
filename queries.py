@@ -131,13 +131,9 @@ def get_prediction_data(connection, date):
             dataframe_precios_camaron["FECHA"]
         ).dt.strftime("%Y-%m-%d")
 
-        merged_data = pd.merge(
-            merge_ventas_sow, dataframe_exportaciones, on="FECHA", how="left"
-        )
-        merged_data = pd.merge(merged_data, dataframe_mp, on="FECHA", how="left")
-        merged_data = pd.merge(
-            merged_data, dataframe_precios_camaron, on="FECHA", how="left"
-        )
+        merged_data = pd.merge(merge_ventas_sow, dataframe_exportaciones, on="FECHA")
+        merged_data = pd.merge(merged_data, dataframe_mp, on="FECHA")
+        merged_data = pd.merge(merged_data, dataframe_precios_camaron, on="FECHA")
 
         merged_data = merged_data.set_index("FECHA")
 
@@ -279,7 +275,7 @@ def get_sow_for_prediction(cursor, fecha_desde, fecha_hasta):
 def get_precios_camaron_for_prediction(cursor, fecha_desde, fecha_hasta):
     cursor.execute(
         f"""
-        SELECT 
+        (SELECT 
             fecha as FECHA,
             `30-40 (29 g)`,
             `40-50 (23 g)`,
@@ -288,12 +284,22 @@ def get_precios_camaron_for_prediction(cursor, fecha_desde, fecha_hasta):
             `70-80 (13 g)`,
             `80-100 (11 g)`
         FROM precio_camaron
-        WHERE fecha >= '{fecha_desde}' 
-        AND fecha <= (
-            SELECT MIN(fecha)
-            FROM precio_camaron
-            WHERE fecha >= '{fecha_hasta}'
-        )
+        WHERE fecha <= '{fecha_desde}' 
+        ORDER BY fecha DESC
+        LIMIT 1)
+
+        UNION ALL
+
+        (SELECT
+            fecha as FECHA,
+            `30-40 (29 g)`,
+            `40-50 (23 g)`,
+            `50-60 (18 g)`,
+            `60-70 (15 g)`,
+            `70-80 (13 g)`,
+            `80-100 (11 g)`
+        FROM precio_camaron
+        WHERE fecha BETWEEN '{fecha_desde}' AND '{fecha_hasta}')
     """
     )
     data_precios_camaron = cursor.fetchall()
@@ -329,7 +335,7 @@ def get_precios_camaron_for_prediction(cursor, fecha_desde, fecha_hasta):
     df_date_range["FECHA"] = pd.to_datetime(df_date_range["FECHA"])
 
     dataframe_precios_camaron = pd.merge_asof(
-        df_date_range, dataframe_precios_camaron, on="FECHA", direction="forward"
+        df_date_range, dataframe_precios_camaron, on="FECHA", direction="backward"
     )
     dataframe_precios_camaron = dataframe_precios_camaron.ffill()
 
