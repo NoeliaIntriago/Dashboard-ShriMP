@@ -8,7 +8,6 @@ from queries import (
 )
 
 import os
-import pandas as pd
 import streamlit as st
 import toml
 import mysql.connector
