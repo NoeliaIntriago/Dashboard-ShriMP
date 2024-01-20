@@ -28,21 +28,23 @@ mysql = mysql.connector.connect(
 
 
 def load_files(archivo, tabla):
-    match tabla:
-        case "Exportaciones":
-            upload_exportaciones_data(mysql, archivo)
-        case "Materia Prima":
-            upload_materia_prima_data(mysql, archivo)
-        case "Precio Camarón":
-            upload_precio_camaron_data(mysql, archivo)
-        case "Share of Wallet":
-            upload_sow_data(mysql, archivo)
-        case "Ventas":
-            upload_ventas_data(mysql, archivo)
+    if tabla == "Exportaciones":
+        upload_exportaciones_data(mysql, archivo)
+    elif tabla == "Materia Prima":
+        upload_materia_prima_data(mysql, archivo)
+    elif tabla == "Precio Camarón":
+        upload_precio_camaron_data(mysql, archivo)
+    elif tabla == "Share of Wallet":
+        upload_sow_data(mysql, archivo)
+    elif tabla == "Ventas":
+        upload_ventas_data(mysql, archivo)
 
 
 def main():
     st.set_page_config(page_title="File Upload", layout="wide", page_icon=":shrimp:")
+
+    with open(path + "/../style/file_upload_style.css") as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
     with open(path + "/../style/style.css") as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)

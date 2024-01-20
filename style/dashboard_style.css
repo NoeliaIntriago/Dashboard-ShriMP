@@ -1,0 +1,11 @@
+div[data-testid="stHorizontalBlock"]:nth-of-type(4) {
+    gap: 8rem;
+}
+
+div[data-testid="stHorizontalBlock"]:nth-of-type(8){
+    margin-bottom: 2rem;
+}
+
+.stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
+    font-size: 1.5rem;
+}

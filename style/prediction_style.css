@@ -2,7 +2,7 @@ div[data-testid="stSidebarUserContent"] {
     padding: 3rem 1.5rem;
 }
 
-div[data-testid="stHorizontalBlock"]:nth-of-type(2) {
+div[data-testid="stHorizontalBlock"]:nth-of-type(3) {
     display: flex;
     justify-content: center;
     align-items: center;

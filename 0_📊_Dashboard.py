@@ -51,11 +51,12 @@ def draw_results(input_data):
         .sort_values(by="Toneladas", ascending=False)
     )
 
+    st.subheader("Resumen de ventas")
     col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
     with col1:
         st.metric(
             label="Total de ventas",
-            value=str(round(dataframe["Toneladas"].sum(), 2)) + "Ton",
+            value=str(round(dataframe["Toneladas"].sum(), 2)) + " Ton",
         )
 
     with col2:
@@ -66,7 +67,7 @@ def draw_results(input_data):
                     dataframe["Toneladas"].sum() / len(dataframe["Cliente"].unique()), 2
                 )
             )
-            + "Ton",
+            + " Ton",
         )
 
     with col3:
@@ -75,85 +76,99 @@ def draw_results(input_data):
     with col4:
         st.metric(label="Cliente que más compra", value=client_df.iloc[0]["Cliente"])
 
-    st.subheader("Tendencia diaria de ventas")
-    line_df = dataframe.groupby(dataframe["Fecha"].dt.day)["Toneladas"].sum()
-    st.line_chart(line_df)
+    tab1, tab2 = st.tabs(["Tendencia", "Detalle de ventas"])
 
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        st.subheader("Ventas por producto")
-        st.altair_chart(
-            alt.Chart(bar_df)
-            .mark_bar()
-            .encode(
-                x=alt.Y("Producto", sort=None, title="Producto"),
-                y=alt.Y("Toneladas", title="Toneladas"),
-                tooltip=["Producto", "Toneladas"],
-                color=alt.Color("Producto", legend=None),
-            ),
+    with tab1:
+        st.subheader("Tendencia diaria de ventas")
+        line_df = dataframe.groupby(dataframe["Fecha"].dt.day)["Toneladas"].sum()
+        st.line_chart(line_df)
+
+    with tab2:
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.subheader("Ventas por producto")
+            st.altair_chart(
+                alt.Chart(bar_df)
+                .mark_bar()
+                .encode(
+                    x=alt.Y("Producto", sort=None, title="Producto"),
+                    y=alt.Y("Toneladas", title="Toneladas"),
+                    tooltip=["Producto", "Toneladas"],
+                    color=alt.Color("Producto", legend=None),
+                ),
+                use_container_width=True,
+            )
+
+        with col2:
+            top_6_etapa = (
+                dataframe.groupby(["Etapa", "Producto"])["Toneladas"]
+                .sum()
+                .reset_index()
+                .sort_values(by="Toneladas", ascending=False)
+                .head(6)
+            )
+            fig = px.sunburst(
+                data_frame=dataframe,
+                path=[top_6_etapa["Etapa"], top_6_etapa["Producto"]],
+                color_discrete_sequence=px.colors.qualitative.Alphabet,
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.subheader("Ventas por cliente")
+            st.altair_chart(
+                alt.Chart(client_df)
+                .mark_bar()
+                .encode(
+                    x=alt.Y("Cliente", sort=None, title="Cliente"),
+                    y=alt.Y("Toneladas", title="Toneladas"),
+                    tooltip=["Cliente", "Toneladas"],
+                    color=alt.Color("Cliente", legend=None),
+                ),
+                use_container_width=True,
+            )
+
+        with col2:
+            top_6_clientes = (
+                dataframe.groupby(["Cliente", "Producto"])["Toneladas"]
+                .sum()
+                .reset_index()
+                .sort_values(by="Toneladas", ascending=False)
+                .head(6)
+            )
+            fig = px.sunburst(
+                data_frame=dataframe,
+                path=[top_6_clientes["Cliente"], top_6_clientes["Producto"]],
+                color_discrete_sequence=px.colors.qualitative.Pastel,
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        # DATAFRAME DETALLE DE VENTAS
+        st.subheader("Detalle de ventas")
+        st.dataframe(
+            dataframe,
             use_container_width=True,
+            hide_index=True,
+            column_order=[
+                "Fecha",
+                "Cliente",
+                "Producto",
+                "Familia",
+                "Etapa",
+                "Toneladas",
+            ],
+            column_config={"Fecha": st.column_config.TimeColumn(format="YYYY-MM-DD")},
         )
-
-    with col2:
-        top_6_etapa = (
-            dataframe.groupby(["Etapa", "Producto"])["Toneladas"]
-            .sum()
-            .reset_index()
-            .sort_values(by="Toneladas", ascending=False)
-            .head(6)
-        )
-        fig = px.sunburst(
-            data_frame=dataframe,
-            path=[top_6_etapa["Etapa"], top_6_etapa["Producto"]],
-            color_discrete_sequence=px.colors.qualitative.Alphabet,
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        st.subheader("Ventas por cliente")
-        st.altair_chart(
-            alt.Chart(client_df)
-            .mark_bar()
-            .encode(
-                x=alt.Y("Cliente", sort=None, title="Cliente"),
-                y=alt.Y("Toneladas", title="Toneladas"),
-                tooltip=["Cliente", "Toneladas"],
-                color=alt.Color("Cliente", legend=None),
-            ),
-            use_container_width=True,
-        )
-
-    with col2:
-        top_6_clientes = (
-            dataframe.groupby(["Cliente", "Producto"])["Toneladas"]
-            .sum()
-            .reset_index()
-            .sort_values(by="Toneladas", ascending=False)
-            .head(6)
-        )
-        fig = px.sunburst(
-            data_frame=dataframe,
-            path=[top_6_clientes["Cliente"], top_6_clientes["Producto"]],
-            color_discrete_sequence=px.colors.qualitative.Pastel,
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    # DATAFRAME DETALLE DE VENTAS
-    st.subheader("Detalle de ventas")
-    st.dataframe(
-        dataframe,
-        use_container_width=True,
-        hide_index=True,
-        column_order=["Fecha", "Cliente", "Producto", "Familia", "Etapa", "Toneladas"],
-        column_config={"Fecha": st.column_config.TimeColumn(format="YYYY-MM-DD")},
-    )
 
 
 def main():
     st.set_page_config(
         page_title="ShriMP Dashboard", layout="wide", page_icon=":shrimp:"
     )
+
+    with open(path + "/style/dashboard_style.css") as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
     with open(path + "/style/style.css") as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
@@ -166,7 +181,7 @@ def main():
     input_data = {}
 
     st.subheader("Filtros")
-    col1, col2 = st.columns([1, 1], gap="large")
+    col1, col2, col3 = st.columns([1, 1, 1], gap="large")
 
     input_data["year"] = col1.number_input(
         "Año", min_value=2020, max_value=2024, step=1

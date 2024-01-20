@@ -354,6 +354,9 @@ def main():
     with open(path + "/../style/prediction_style.css") as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
+    with open(path + "/../style/style.css") as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
     logo = Image.open(path + "/../images/logo_ai.png")
     col1, col2 = st.columns([0.5, 2])
     col1.image(logo, width=175)
