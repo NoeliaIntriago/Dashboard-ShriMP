@@ -1,3 +1,35 @@
+"""
+File Name: 0_Dashboard.py
+
+Author: Noelia Intriago (GitHub: NoeliaIntriago)
+
+Creation date: 11/01/2024
+
+Last modified: 21/01/2024
+
+Description:
+    This Python script is central to a Streamlit dashboard application, tailored for visualizing 
+    sales data. It includes the `main` function, which sets up the dashboard's layout, styling, and 
+    interactivity, and the `draw_results` function for detailed data processing and visualization. 
+    The script handles user inputs, queries data from a MySQL database, and uses libraries like 
+    Pandas, Altair, and Plotly for data manipulation and visualization.
+
+Dependencies:
+    - pandas
+    - streamlit
+    - altair
+    - plotly.express
+    - MySQL connector/library
+    - PIL (for image processing)
+
+Functions:
+    - main(): Sets up the Streamlit dashboard layout, styles, and interactive components.
+    - draw_results(input_data): Processes and visualizes sales data based on user inputs.
+
+Usage: 
+    Execute this script to run the Streamlit dashboard application. The application provides 
+    interactive visualizations of sales data, assisting in data-driven decision-making.
+"""
 from PIL import Image
 from queries import get_clients, get_historic
 
@@ -24,6 +56,32 @@ mysql = mysql.connector.connect(
 
 
 def draw_results(input_data):
+    """
+    Draws and displays the results of sales data in various visual formats on a Streamlit dashboard.
+
+    This function retrieves historical sales data based on the provided input data, processes it, and
+    displays a series of visualizations and metrics. These include bar charts for sales by product and
+    client, a line chart for daily sales trends, a sunburst chart for product sales by stage, and a
+    detailed sales data table.
+
+    Parameters:
+        - input_data: A data structure containing the necessary parameters for the sales data query. The exact structure is dependent on the database schema and query requirements.
+
+    Side Effects:
+        - Calls the `get_historic` function to retrieve sales data from a MySQL database.
+        - Uses Streamlit (st) to render error messages, metrics, charts, and tables directly to the dashboard.
+        - Processes and manipulates the data using pandas.
+
+    Note:
+        - This function does not return any value. All results are displayed directly on the Streamlit dashboard.
+        - It handles error scenarios by displaying appropriate error messages on the dashboard.
+
+    Dependencies:
+        - pandas (as pd)
+        - streamlit (as st)
+        - altair (as alt)
+        - plotly.express (as px)
+    """
     response = get_historic(mysql, input_data)
 
     if response[1] == 500:
@@ -163,6 +221,20 @@ def draw_results(input_data):
 
 
 def main():
+    """
+    Main function of the Streamlit dashboard application. It sets up the page configuration,
+    applies custom CSS styles, and defines the layout and interactive components of the dashboard.
+
+    This function initializes the dashboard with a custom title, layout settings, and a logo. It
+    creates interactive widgets for filtering the sales data, such as year and month selectors, client
+    and stage choice inputs. These filters are used to fetch and display relevant sales data using
+    the `draw_results` function.
+
+    Side Effects:
+        - Configures the Streamlit page with a title, layout, and icon.
+        - Reads and applies custom CSS styles to the dashboard.
+        - Displays the dashboard elements like title, filters, and calls the `draw_results` function to render the sales data visualizations based on user inputs.
+    """
     st.set_page_config(
         page_title="ShriMP Dashboard", layout="wide", page_icon=":shrimp:"
     )

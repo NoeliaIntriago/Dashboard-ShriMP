@@ -1,3 +1,39 @@
+"""
+File Name: 1_Prediction.py
+
+Author: Noelia Intriago (GitHub: NoeliaIntriago)
+
+Creation date: 11/01/2024
+
+Last modified: 21/01/2024
+
+Description:
+    This Python script is an integral part of a Streamlit dashboard application that focuses on 
+    predicting shrimp feed production. It includes the `main` function for setting up the dashboard 
+    layout, interactive elements for date selection and prediction, and functions for processing 
+    predictions (`predict`) and generating visualizations (`build_week_charts`). The script also 
+    contains functionalities to write the prediction results into an Excel file (`write_excel`) 
+    for download.
+
+Dependencies:
+    - pandas
+    - streamlit (st)
+    - altair (for data visualization)
+    - openpyxl (for Excel file handling)
+    - io (for byte stream handling)
+
+Functions:
+    - main(): Sets up the Streamlit dashboard layout and interactivity.
+    - predict(result): Forecasts future production volumes based on historical data.
+    - build_week_dataframes(df): Processes data to create weekly pivot tables.
+    - build_week_charts(df, num_week): Generates and displays weekly production charts.
+    - write_excel(df1, df2, df3, df4, date): Creates an Excel file from weekly data.
+    - process_display_data(date): Processes and displays prediction data for a given date.
+
+Usage: 
+    This script is executed to run the ShriMP Prediction Streamlit dashboard, providing an interactive 
+    platform for predicting and analyzing shrimp feed production.
+"""
 from datetime import timedelta
 from keras.models import load_model
 from PIL import Image
@@ -27,7 +63,24 @@ mysql = mysql.connector.connect(
 model = load_model(path + "/../model/model_lstm_all_76_8.h5")
 
 
+@st.cache_data
 def predict(result):
+    """
+    Builds a pivot DataFrame for each week from the provided DataFrame.
+
+    This function melts the original DataFrame to long format and then creates a pivot table. It extracts 
+    client and product-stage information from the column names and maps client IDs to their names.
+
+    Parameters:
+        - df: DataFrame containing weekly data with specific column naming conventions (e.g., PRODUCT_STAGE_WeekNumber).
+
+    Returns:
+        - A pivot DataFrame with 'CLIENTE' as rows, 'PRODUCTO_ETAPA' as columns, and their corresponding values.
+
+    Notes:
+        - Assumes a specific format for the input DataFrame's column names.
+        - Requires a predefined function `get_clients` to map client IDs to names.
+    """
     columns_order = [
         "AUR_SEEDING_1",
         "AUR_VOLUMA_1",
@@ -296,7 +349,24 @@ def predict(result):
     return prediction, columns_out
 
 
+@st.cache_data
 def build_week_dataframes(df):
+    """
+    Builds a pivot DataFrame for each week from the provided DataFrame.
+
+    This function melts the original DataFrame to long format and then creates a pivot table. It extracts 
+    client and product-stage information from the column names and maps client IDs to their names.
+
+    Parameters:
+        - df: DataFrame containing weekly data with specific column naming conventions (e.g., PRODUCT_STAGE_WeekNumber).
+
+    Returns:
+        - A pivot DataFrame with 'CLIENTE' as rows, 'PRODUCTO_ETAPA' as columns, and their corresponding values.
+
+    Notes:
+        - Assumes a specific format for the input DataFrame's column names.
+        - Requires a predefined function `get_clients` to map client IDs to names.
+    """
     clientes = get_clients(mysql)[0]
     mapeo_clientes = {i + 1: nombre for i, nombre in enumerate(clientes)}
 
@@ -315,6 +385,19 @@ def build_week_dataframes(df):
 
 
 def build_week_charts(df, num_week):
+    """
+    Generates and displays a line chart for the given DataFrame and week number using Streamlit and Altair.
+
+    This function melts the DataFrame to long format for charting. It then creates a line chart showing 
+    values per client and product-stage, displaying it on the Streamlit dashboard.
+
+    Parameters:
+    - df: DataFrame with 'CLIENTE' as rows and 'PRODUCTO_ETAPA' as columns.
+    - num_week: The week number for which the chart is being generated.
+
+    Side Effects:
+    - Renders a line chart to the Streamlit dashboard using Altair.
+    """
     df_pivot = df.melt(
         id_vars=["CLIENTE"], var_name="PRODUCTO_ETAPA", value_name="VALOR"
     )
@@ -335,6 +418,24 @@ def build_week_charts(df, num_week):
 
 
 def write_excel(df1, df2, df3, df4, date):
+    """
+    Writes multiple DataFrames to an Excel file and returns the file as a byte stream.
+
+    The function takes four DataFrames corresponding to four weeks of data and a start date. It writes 
+    each DataFrame to a separate sheet in an Excel file, naming the sheets based on the week number and 
+    the provided date.
+
+    Parameters:
+        - df1, df2, df3, df4: DataFrames for weeks 1, 2, 3, and 4, respectively.
+        - date: A datetime object representing the start date for the first week.
+
+    Returns:
+        - A byte stream of the generated Excel file.
+
+    Dependencies:
+        - pandas
+        - openpyxl
+    """
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df1.to_excel(writer, sheet_name=f"Semana 1 ({date})")
@@ -346,7 +447,72 @@ def write_excel(df1, df2, df3, df4, date):
     return processed_data
 
 
+def process_display_data(date):
+    """
+    Processes and displays shrimp feed production prediction data for a specified date.
+
+    This function retrieves prediction data based on the provided date, applies the predictive model, 
+    and then processes and visualizes the predicted data for the next four weeks. It splits the model's 
+    prediction into weekly segments, creates dataframes for each week using `build_week_dataframes`, 
+    and displays charts for each week using `build_week_charts`.
+
+    Parameters:
+        - date: A datetime object representing the date for which the predictions are to be made.
+
+    Returns:
+        - A tuple of DataFrames for each of the four weeks containing the processed prediction data.
+
+    Notes:
+        - The function assumes a specific structure and naming convention of the columns in the prediction data.
+        - Relies on `get_prediction_data`, `predict`, `build_week_dataframes`, and `build_week_charts` functions to fetch, predict, process, and visualize data respectively.
+        - If no prediction data is available for the given date, the function will not perform any further actions.
+    """
+    prediction_data = get_prediction_data(_connection=mysql, date=date)
+    if prediction_data is not None:
+        model_prediction, columns_out = predict(prediction_data)
+
+        week1 = pd.DataFrame(model_prediction[0][0:70]).T
+        week1.columns = columns_out
+        week1 = build_week_dataframes(week1)
+        build_week_charts(week1, 1)
+
+        week2 = pd.DataFrame(model_prediction[0][70:140]).T
+        week2.columns = columns_out
+        week2 = build_week_dataframes(week2)
+        build_week_charts(week2, 2)
+
+        week3 = pd.DataFrame(model_prediction[0][140:210]).T
+        week3.columns = columns_out
+        week3 = build_week_dataframes(week3)
+        build_week_charts(week3, 3)
+
+        week4 = pd.DataFrame(model_prediction[0][210:280]).T
+        week4.columns = columns_out
+        week4 = build_week_dataframes(week4)
+        build_week_charts(week4, 4)
+
+        return week1, week2, week3, week4
+
+
 def main():
+    """
+    Main function for the ShriMP Prediction Streamlit dashboard.
+
+    This function sets up the Streamlit page configuration and styles, displays a logo, and explains 
+    the functionality of the dashboard. It includes a date input form for the user to select a date 
+    for shrimp feed production prediction. Upon form submission, it processes the selected date, 
+    displays the predicted production for the next four weeks, and provides an option to download 
+    this data as an Excel report.
+
+    The function integrates various components like database querying for date range, data processing 
+    for predictions, and data visualization.
+
+    Side Effects:
+        - Sets the Streamlit page configuration and renders HTML/CSS for styling.
+        - Interacts with global session state for storing user input.
+        - Calls functions for data processing and Excel report generation.
+        - Displays interactive elements, text, and images on the Streamlit dashboard.
+    """
     st.set_page_config(
         page_title="ShriMP Prediction", layout="wide", page_icon=":shrimp:"
     )
@@ -391,41 +557,17 @@ def main():
             value=None,
             min_value=min_date,
             max_value=max_date,
-            key=None,
-            help=None,
             format="YYYY-MM-DD",
         )
         predict_button = st.form_submit_button(label="Predecir")
-        prediction_data = None
 
-        if predict_button and date is not None:
-            prediction_data = get_prediction_data(mysql, date)
+        if predict_button:
+            st.session_state.predicted_date = date
 
-        elif predict_button and date is None:
-            st.write("Por favor seleccione una fecha.")
-
-    if prediction_data is not None:
-        model_prediction, columns_out = predict(prediction_data)
-
-        week1 = pd.DataFrame(model_prediction[0][0:70]).T
-        week1.columns = columns_out
-        week1 = build_week_dataframes(week1)
-        build_week_charts(week1, 1)
-
-        week2 = pd.DataFrame(model_prediction[0][70:140]).T
-        week2.columns = columns_out
-        week2 = build_week_dataframes(week2)
-        build_week_charts(week2, 2)
-
-        week3 = pd.DataFrame(model_prediction[0][140:210]).T
-        week3.columns = columns_out
-        week3 = build_week_dataframes(week3)
-        build_week_charts(week3, 3)
-
-        week4 = pd.DataFrame(model_prediction[0][210:280]).T
-        week4.columns = columns_out
-        week4 = build_week_dataframes(week4)
-        build_week_charts(week4, 4)
+    if "predicted_date" in st.session_state and date is not None:
+        week1, week2, week3, week4 = process_display_data(
+            st.session_state.predicted_date
+        )
 
         excel = write_excel(week1, week2, week3, week4, date)
         col2.download_button(
@@ -437,4 +579,5 @@ def main():
 
 
 if __name__ == "__main__":
+    st.cache_data.clear()
     main()

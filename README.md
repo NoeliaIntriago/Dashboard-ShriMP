@@ -26,3 +26,22 @@ Install required packages for the project inside venv:
     streamlit run 0_📊_Dashboard.py
 ```
 
+# Docs
+Make sure you have some TeX distribution for your OS.
+
+After that:
+
+## On Windows
+
+```
+    cd docs
+    .\make.bat latexpdf    
+```
+
+## On Linux
+```
+    cd docs
+    make latexpdf
+```
+
+Then use some LaTeX Editor, upload the required files and get the PDF

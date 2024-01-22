@@ -1,11 +1,69 @@
+"""
+File Name: queries.py
+
+Author: Noelia Intriago (GitHub: NoeliaIntriago)
+
+Creation date: 11/01/2024
+
+Last modified: 21/01/2024
+
+Description: This script contains a collection of functions used for executing various SQL queries to a MySQL database. 
+    The functions in this file are primarily used to retrieve data for different aspects of the ShriMP 
+    dashboard application. This includes fetching data related to clients, historic transactions, price 
+    information, and other relevant data sets required by the application.
+
+    Each function within this file is designed to connect to the database, execute a specific SQL query, 
+    handle any exceptions, and return the results or an error message. The functions are typically used 
+    to support the data fetching requirements of different components of the dashboard.
+
+Dependencies:
+    - pandas (for data handling)
+    - streamlit (st) (for Streamlit application components)
+    - mysql.connector (for MySQL database interactions)
+    - traceback (for error handling)
+
+Functions:
+    - get_min_max_date(connection): Retrieves minimum and maximum date from a specific table.
+    - get_clients(connection): Fetches client data from the database.
+    - get_historic(connection, params): Retrieves historical data based on given parameters.
+    - get_prediction_data(_connection, date): Retrieves data for prediction based on given date.
+    - check_previous_month_data(connection, date, table): Checks if previous month data exists.
+    - check_already_uploaded_data(connection, date, table): Checks if data has already been uploaded.
+    - check_client_exists(cursor, cod_znje, des_znje): Checks if client exists in the database.
+    - check_product_exists(cursor, cod_sku, des_sku, porcentaje_proteina, val_formato, familia, grupo_linea, familia_linea): Checks if product exists in the database.
+    - upload_ventas_data(connection, data): Uploads ventas data to the database.
+    - upload_materia_prima_data(connection, data): Uploads materia prima data to the database.
+    - upload_precio_camaron_data(connection, data): Uploads precio camaron data to the database.
+    - upload_sow_data(connection, data): Uploads sow data to the database.
+    - upload_exportaciones_data(connection, data): Uploads exportaciones data to the database.
+
+Usage: 
+    These functions are called by various components of the Streamlit dashboard application to 
+    retrieve necessary data from the MySQL database, enabling dynamic data-driven functionality 
+    in the application.
+"""
 from datetime import datetime, timedelta
 
 import pandas as pd
+import streamlit as st
 import traceback
 
 
 ## GET MIN_DATE AND MAX_DATE
 def get_min_max_date(connection):
+    """
+    Retrieves the minimum and maximum dates from the 'venta' table in the database.
+
+    This function executes a SQL query to find the earliest and latest dates of sale transactions.
+    It is used to determine the range of data available for analysis or display in the application.
+
+    Parameters:
+        - connection: The database connection object.
+
+    Returns:
+        - On success, returns a tuple containing the minimum and maximum dates, and a status code 200.
+        - On failure, returns an error message and a status code 500.
+    """
     try:
         cursor = connection.cursor()
         cursor.execute(
@@ -22,6 +80,19 @@ def get_min_max_date(connection):
 
 ## GET ALL CLIENTS
 def get_clients(connection):
+    """
+    Retrieves all clients from the 'cliente' table in the database.
+
+    This function executes a SQL query to fetch all clients from the database. It is used to populate
+    the client selection dropdown in the application.
+
+    Parameters:
+        - connection: The database connection object.
+
+    Returns:
+        - On success, returns a tuple containing the list of clients and a status code 200.
+        - On failure, returns an error message and a status code 500.
+    """
     try:
         cursor = connection.cursor()
         cursor.execute("SELECT * FROM cliente")
@@ -36,6 +107,20 @@ def get_clients(connection):
 
 ## GET HISTORY
 def get_historic(connection, params):
+    """
+    Retrieves historic data based on given parameters.
+
+    This function executes a SQL query to fetch historic data from the database. It is used to populate
+    the detailed sales data table.
+
+    Parameters:
+        - connection: The database connection object.
+        - params: A data structure containing the necessary parameters for the sales data query. The exact structure is dependent on the database schema and query requirements.
+
+    Returns:
+        - On success, returns a tuple containing the list of historic sales data and a status code 200.
+        - On failure, returns an error message and a status code 500.
+    """
     try:
         cursor = connection.cursor()
         base_query = """
@@ -91,26 +176,41 @@ def get_historic(connection, params):
         return "Something went wrong", 500
 
 
+@st.cache_data
 ## GET PREDICTION
-def get_prediction_data(connection, date):
+def get_prediction_data(_connection, date):
+    """
+    Retrieves data for prediction based on given date.
+
+    This function executes a series of SQL queries to fetch data from the database. It is used to
+    generate the data required for the production prediction model.
+
+    Parameters:
+        - _connection: The database connection object.
+        - date: The date for which the prediction data is required.
+
+    Returns:
+        - On success, returns a tuple containing the prediction data and a status code 200.
+        - On failure, returns an error message and a status code 500.
+    """
     fecha_desde = date - timedelta(weeks=4)
     fecha_hasta = date - timedelta(days=1)
 
     try:
         dataframe_mp = get_materia_prima_for_prediction(
-            connection.cursor(), fecha_desde, fecha_hasta
+            _connection.cursor(), fecha_desde, fecha_hasta
         )
         dataframe_sow = get_sow_for_prediction(
-            connection.cursor(), fecha_desde, fecha_hasta
+            _connection.cursor(), fecha_desde, fecha_hasta
         )
         dataframe_precios_camaron = get_precios_camaron_for_prediction(
-            connection.cursor(), fecha_desde, fecha_hasta
+            _connection.cursor(), fecha_desde, fecha_hasta
         )
         dataframe_exportaciones = get_exportaciones_for_prediction(
-            connection.cursor(), fecha_desde, fecha_hasta
+            _connection.cursor(), fecha_desde, fecha_hasta
         )
         dataframe_ventas = get_ventas_for_prediction(
-            connection.cursor(), fecha_desde, fecha_hasta
+            _connection.cursor(), fecha_desde, fecha_hasta
         )
 
         merge_ventas_sow = pd.merge(
@@ -146,6 +246,21 @@ def get_prediction_data(connection, date):
 
 ## GET MATERIA PRIMA INFORMATION FOR PREDICTION
 def get_materia_prima_for_prediction(cursor, fecha_desde, fecha_hasta):
+    """
+    Retrieves materia prima data based on given date range.
+
+    This function executes a SQL query to fetch materia prima data from the database. It is used to
+    generate the data required for the production prediction model.
+
+    Parameters:
+        - cursor: The database cursor object.
+        - fecha_desde: The start date of the date range.
+        - fecha_hasta: The end date of the date range.
+
+    Returns:
+        - On success, returns a dataframe containing the materia prima data and a status code 200.
+        - On failure, returns an error message and a status code 500.
+    """
     cursor.execute(
         f"""
         SELECT 
@@ -198,6 +313,21 @@ def get_materia_prima_for_prediction(cursor, fecha_desde, fecha_hasta):
 
 ## GET SOW INFORMATION FOR PREDICTION
 def get_sow_for_prediction(cursor, fecha_desde, fecha_hasta):
+    """
+    Retrieves sow data based on given date range.
+
+    This function executes a SQL query to fetch sow data from the database. It is used to
+    generate the data required for the production prediction model.
+
+    Parameters:
+        - cursor: The database cursor object.
+        - fecha_desde: The start date of the date range.
+        - fecha_hasta: The end date of the date range.
+
+    Returns:
+        - On success, returns a dataframe containing the sow data and a status code 200.
+        - On failure, returns an error message and a status code 500.
+    """
     columnas = ["NICOVITA", "POTENCIAL_GRUPO", "SOW_MAX_ALCANZABLE"]
     clientes = range(1, 8)
 
@@ -273,6 +403,21 @@ def get_sow_for_prediction(cursor, fecha_desde, fecha_hasta):
 
 ## GET PRECIOS CAMARÓN FOR PREDICTION
 def get_precios_camaron_for_prediction(cursor, fecha_desde, fecha_hasta):
+    """
+    Retrieves precio camaron data based on given date range.
+
+    This function executes a SQL query to fetch precio camaron data from the database. It is used to
+    generate the data required for the production prediction model.
+
+    Parameters:
+        - cursor: The database cursor object.
+        - fecha_desde: The start date of the date range.
+        - fecha_hasta: The end date of the date range.
+
+    Returns:
+        - On success, returns a dataframe containing the precio camaron data and a status code 200.
+        - On failure, returns an error message and a status code 500.
+    """
     cursor.execute(
         f"""
         (SELECT 
@@ -344,6 +489,21 @@ def get_precios_camaron_for_prediction(cursor, fecha_desde, fecha_hasta):
 
 ## GET EXPORTACIONES FOR PREDICTION
 def get_exportaciones_for_prediction(cursor, fecha_desde, fecha_hasta):
+    """
+    Retrieves exportaciones data based on given date range.
+
+    This function executes a SQL query to fetch exportaciones data from the database. It is used to
+    generate the data required for the production prediction model.
+
+    Parameters:
+        - cursor: The database cursor object.
+        - fecha_desde: The start date of the date range.
+        - fecha_hasta: The end date of the date range.
+
+    Returns:
+        - On success, returns a dataframe containing the exportaciones data and a status code 200.
+        - On failure, returns an error message and a status code 500.
+    """
     cursor.execute(
         f"""
         SELECT 
@@ -375,6 +535,21 @@ def get_exportaciones_for_prediction(cursor, fecha_desde, fecha_hasta):
 
 ## GET VENTAS FOR PREDICTION
 def get_ventas_for_prediction(cursor, fecha_desde, fecha_hasta):
+    """
+    Retrieves ventas data based on given date range.
+
+    This function executes a SQL query to fetch ventas data from the database. It is used to
+    generate the data required for the production prediction model.
+
+    Parameters:
+        - cursor: The database cursor object.
+        - fecha_desde: The start date of the date range.
+        - fecha_hasta: The end date of the date range.
+
+    Returns:
+        - On success, returns a dataframe containing the ventas data and a status code 200.
+        - On failure, returns an error message and a status code 500.
+    """
     ## CONSTRUCCIÓN DE DATAFRAME VACÍO
     cursor.execute(
         f"""
@@ -451,8 +626,125 @@ def get_ventas_for_prediction(cursor, fecha_desde, fecha_hasta):
     return df_resultado
 
 
+## CHECK PREVIOUS MONTH DATA
+def check_previous_month_data(connection, date, table):
+    """
+    Checks if previous month data exists.
+
+    This function executes a SQL query to check if data exists for the previous month. It is used to
+    validate the data upload process.
+
+    Parameters:
+        - connection: The database connection object.
+        - date: The date for which the data upload is being attempted.
+        - table: The table for which the data upload is being attempted.
+
+    Returns:
+        - On success, returns True if data exists for the previous month, and False otherwise.
+        - On failure, returns an error message and a status code 500.
+    """
+    first_day_current_month = date.replace(day=1)
+    first_day_previous_month = first_day_current_month - timedelta(days=1)
+    first_day_previous_month = first_day_previous_month.replace(day=1)
+
+    start_date = first_day_previous_month.strftime("%Y-%m-%d")
+    end_date = first_day_current_month.strftime("%Y-%m-%d")
+
+    if table == "venta":
+        query = f"""
+            SELECT COUNT(*) FROM venta
+            WHERE fecha_emision >= '{start_date}' AND fecha_emision < '{end_date}'
+        """
+    elif table == "sow":
+        query = f"""
+            SELECT COUNT(*) FROM sow
+            WHERE fecha_periodo >= '{start_date}' AND fecha_periodo < '{end_date}'
+        """
+    elif (
+        table == "exportacion" or table == "precio_camaron" or table == "materia_prima"
+    ):
+        query = f"""
+            SELECT COUNT(*) FROM exportacion
+            WHERE fecha >= '{start_date}' AND fecha < '{end_date}'
+        """
+
+    cursor = connection.cursor()
+    cursor.execute(query)
+    data = cursor.fetchone()
+    return data[0] > 0
+
+
+## CHECK ALREADY UPLOADED DATA
+def check_already_uploaded_data(connection, date, table):
+    """
+    Checks if data has already been uploaded.
+
+    This function executes a SQL query to check if data has already been uploaded for the given month.
+    It is used to validate the data upload process.
+
+    Parameters:
+        - connection: The database connection object.
+        - date: The date for which the data upload is being attempted.
+        - table: The table for which the data upload is being attempted.
+
+    Returns:
+        - On success, returns True if data exists for the given month, and False otherwise.
+        - On failure, returns an error message and a status code 500.
+    """
+    first_day_month = date.replace(day=1)
+
+    first_day_next_month = (
+        first_day_month.replace(month=first_day_month.month + 1, day=1)
+        if first_day_month.month < 12
+        else first_day_month.replace(year=first_day_month.year + 1, month=1, day=1)
+    )
+    last_day_month = first_day_next_month - timedelta(days=1)
+
+    start_date = first_day_month.strftime("%Y-%m-%d")
+    end_date = last_day_month.strftime("%Y-%m-%d")
+
+    if table == "venta":
+        query = f"""
+            SELECT COUNT(*) FROM venta
+
+            WHERE fecha_emision >= '{start_date}' AND fecha_emision <= '{end_date}'
+        """
+    elif table == "sow":
+        query = f"""
+            SELECT COUNT(*) FROM sow
+            WHERE fecha_periodo >= '{start_date}' AND fecha_periodo <= '{end_date}'
+        """
+    elif (
+        table == "exportacion" or table == "precio_camaron" or table == "materia_prima"
+    ):
+        query = f"""
+            SELECT COUNT(*) FROM {table}
+            WHERE fecha >= '{start_date}' AND fecha <= '{end_date}'
+        """
+
+    cursor = connection.cursor()
+    cursor.execute(query)
+    data = cursor.fetchone()
+    return data[0] > 0
+
+
 ## CHECK IF CLIENT EXISTS
 def check_client_exists(cursor, cod_znje, des_znje):
+    """
+    Checks if client exists in the database.
+
+    This function executes a SQL query to check if a client exists in the database. If the client does
+    not exist, it is added to the database.
+
+    Parameters:
+        - cursor: The database cursor object.
+        - cod_znje: The client code.
+        - des_znje: The client name.
+
+    Returns:
+        - On success, returns the client ID.
+        - On failure, returns an error message and a status code 500.
+    """
     cursor.execute(f"SELECT id_cliente FROM cliente WHERE cod_cliente = '{cod_znje}'")
     id_cliente = cursor.fetchone()
 
@@ -480,6 +772,26 @@ def check_product_exists(
     grupo_linea,
     familia_linea,
 ):
+    """
+    Checks if product exists in the database.
+
+    This function executes a SQL query to check if a product exists in the database. If the product does
+    not exist, it is added to the database.
+
+    Parameters:
+        - cursor: The database cursor object.
+        - cod_sku: The product code.
+        - des_sku: The product name.
+        - porcentaje_proteina: The product protein percentage.
+        - val_formato: The product format value.
+        - familia: The product family.
+        - grupo_linea: The product line group.
+        - familia_linea: The product family line.
+
+    Returns:
+        - On success, returns the product ID.
+        - On failure, returns an error message and a status code 500.
+    """
     cursor.execute(f"SELECT id_producto FROM producto WHERE cod_sku = '{cod_sku}'")
     id_producto = cursor.fetchone()
 
@@ -499,11 +811,33 @@ def check_product_exists(
 
 ## UPLOAD VENTAS DATA
 def upload_ventas_data(connection, data):
+    """
+    Uploads ventas data to the database.
+
+    This function executes a series of SQL queries to upload ventas data to the database. It is used to
+    upload ventas data from an Excel file to the database.
+
+    Parameters:
+        - connection: The database connection object.
+        - data: The ventas data to be uploaded.
+
+    Returns:
+        - On success, returns a success message and a status code 200.
+        - On failure, returns an error message and a status code 500.
+    """
     try:
         data_ventas = pd.DataFrame(pd.read_excel(data))
         cursor = connection.cursor()
 
         for index, row in data_ventas.iterrows():
+            fecha = datetime.strptime(row["FEC_EMISION"], "%d/%m/%Y")
+
+            if check_already_uploaded_data(connection, fecha, "venta"):
+                return "Ya existe data para el mes que se desea cargar", 400
+
+            if not check_previous_month_data(connection, fecha, "venta"):
+                return "No existe data para el mes anterior", 400
+            
             id_cliente = check_client_exists(cursor, row["COD_ZNJE"], row["DES_ZNJE"])
             id_producto = check_product_exists(
                 cursor,
@@ -515,10 +849,7 @@ def upload_ventas_data(connection, data):
                 row["DES_GRUPO_LINEA"],
                 row["DES_FAMILIA"] + "_" + row["DES_LINEA"],
             )
-
-            fecha = datetime.strptime(row["FEC_EMISION"], "%d/%m/%Y").strftime(
-                "%Y-%m-%d"
-            )
+            fecha = fecha.strftime("%Y-%m-%d")
             toneladas = row["TOT_PESO_FACTURADO"]
 
             insert_venta = f"""
@@ -539,6 +870,20 @@ def upload_ventas_data(connection, data):
 
 ## UPLOAD MATERIA PRIMA DATA
 def upload_materia_prima_data(connection, data):
+    """
+    Uploads materia prima data to the database.
+
+    This function executes a series of SQL queries to upload materia prima data to the database. It is used to
+    upload materia prima data from an Excel file to the database.
+
+    Parameters:
+        - connection: The database connection object.
+        - data: The materia prima data to be uploaded.
+
+    Returns:
+        - On success, returns a success message and a status code 200.
+        - On failure, returns an error message and a status code 500.
+    """
     try:
         cursor = connection.cursor()
 
@@ -568,6 +913,20 @@ def upload_materia_prima_data(connection, data):
 
 ## UPLOAD PRECIOS CAMARÓN DATA
 def upload_precio_camaron_data(connection, data):
+    """
+    Uploads precio camaron data to the database.
+
+    This function executes a series of SQL queries to upload precio camaron data to the database. It is used to
+    upload precio camaron data from an Excel file to the database.
+
+    Parameters:
+        - connection: The database connection object.
+        - data: The precio camaron data to be uploaded.
+
+    Returns:
+        - On success, returns a success message and a status code 200.
+        - On failure, returns an error message and a status code 500.
+    """
     try:
         cursor = connection.cursor()
 
@@ -597,6 +956,20 @@ def upload_precio_camaron_data(connection, data):
 
 ## UPLOAD EXPORTACIONES DATA
 def upload_exportaciones_data(connection, data):
+    """
+    Uploads exportaciones data to the database.
+
+    This function executes a series of SQL queries to upload exportaciones data to the database. It is used to
+    upload exportaciones data from an Excel file to the database.
+
+    Parameters:
+        - connection: The database connection object.
+        - data: The exportaciones data to be uploaded.
+
+    Returns:
+        - On success, returns a success message and a status code 200.
+        - On failure, returns an error message and a status code 500.
+    """
     try:
         cursor = connection.cursor()
 
@@ -622,6 +995,20 @@ def upload_exportaciones_data(connection, data):
 
 ## UPLOAD SOW DATA
 def upload_sow_data(connection, data):
+    """
+    Uploads sow data to the database.
+
+    This function executes a series of SQL queries to upload sow data to the database. It is used to
+    upload sow data from an Excel file to the database.
+
+    Parameters:
+        - connection: The database connection object.
+        - data: The sow data to be uploaded.
+
+    Returns:
+        - On success, returns a success message and a status code 200.
+        - On failure, returns an error message and a status code 500.
+    """
     try:
         cursor = connection.cursor()
 
