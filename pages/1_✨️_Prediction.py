@@ -66,20 +66,28 @@ model = load_model(path + "/../model/model_lstm_all_76_8.h5")
 @st.cache_data
 def predict(result):
     """
-    Builds a pivot DataFrame for each week from the provided DataFrame.
+    Predicts the production of shrimp feed for the next 4 weeks using a pre-trained model.
 
-    This function melts the original DataFrame to long format and then creates a pivot table. It extracts 
-    client and product-stage information from the column names and maps client IDs to their names.
+    This function processes the input data 'result' which includes historical production data. 
+    It performs data resampling, flattening, and scaling to prepare the data for prediction. 
+    The prediction is made using a pre-trained machine learning model and then the output is 
+    inversely transformed to the original scale.
+
+    The function handles specific data columns for input and output data, aggregation for 
+    resampling, and scaling for machine learning model prediction.
 
     Parameters:
-        - df: DataFrame containing weekly data with specific column naming conventions (e.g., PRODUCT_STAGE_WeekNumber).
+        - result: A tuple where the first element is a DataFrame containing historical production data.
 
     Returns:
-        - A pivot DataFrame with 'CLIENTE' as rows, 'PRODUCTO_ETAPA' as columns, and their corresponding values.
+        - A tuple containing:
+            1. The prediction of shrimp feed production for the next 4 weeks.
+            2. The columns relevant to the output data.
 
     Notes:
-        - Assumes a specific format for the input DataFrame's column names.
-        - Requires a predefined function `get_clients` to map client IDs to names.
+        - The function assumes specific column names and structure in the 'result' DataFrame.
+        - It uses MinMaxScaler for scaling the input and output data.
+        - The machine learning model used for prediction should be predefined as 'model'.
     """
     columns_order = [
         "AUR_SEEDING_1",
