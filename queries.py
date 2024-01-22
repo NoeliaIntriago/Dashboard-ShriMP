@@ -5,7 +5,7 @@ Author: Noelia Intriago (GitHub: NoeliaIntriago)
 
 Creation date: 11/01/2024
 
-Last modified: 21/01/2024
+Last modified: 22/01/2024
 
 Description: This script contains a collection of functions used for executing various SQL queries to a MySQL database. 
     The functions in this file are primarily used to retrieve data for different aspects of the ShriMP 
@@ -29,8 +29,6 @@ Functions:
     - get_prediction_data(_connection, date): Retrieves data for prediction based on given date.
     - check_previous_month_data(connection, date, table): Checks if previous month data exists.
     - check_already_uploaded_data(connection, date, table): Checks if data has already been uploaded.
-    - check_client_exists(cursor, cod_znje, des_znje): Checks if client exists in the database.
-    - check_product_exists(cursor, cod_sku, des_sku, porcentaje_proteina, val_formato, familia, grupo_linea, familia_linea): Checks if product exists in the database.
     - upload_ventas_data(connection, data): Uploads ventas data to the database.
     - upload_materia_prima_data(connection, data): Uploads materia prima data to the database.
     - upload_precio_camaron_data(connection, data): Uploads precio camaron data to the database.
@@ -231,11 +229,12 @@ def get_prediction_data(_connection, date):
             dataframe_precios_camaron["FECHA"]
         ).dt.strftime("%Y-%m-%d")
 
-        merged_data = pd.merge(merge_ventas_sow, dataframe_exportaciones, on="FECHA")
-        merged_data = pd.merge(merged_data, dataframe_mp, on="FECHA")
-        merged_data = pd.merge(merged_data, dataframe_precios_camaron, on="FECHA")
+        merged_data = pd.merge(merge_ventas_sow, dataframe_exportaciones, on="FECHA", how="left")
+        merged_data = pd.merge(merged_data, dataframe_mp, on="FECHA", how="left")
+        merged_data = pd.merge(merged_data, dataframe_precios_camaron, on="FECHA", how="left")
 
         merged_data = merged_data.set_index("FECHA")
+        merged_data = merged_data.fillna(0)
 
         return merged_data, 200
 
@@ -704,6 +703,7 @@ def check_already_uploaded_data(connection, date, table):
     end_date = last_day_month.strftime("%Y-%m-%d")
 
     if table == "venta":
+        print(start_date, end_date)
         query = f"""
             SELECT COUNT(*) FROM venta
 
@@ -728,87 +728,6 @@ def check_already_uploaded_data(connection, date, table):
     return data[0] > 0
 
 
-## CHECK IF CLIENT EXISTS
-def check_client_exists(cursor, cod_znje, des_znje):
-    """
-    Checks if client exists in the database.
-
-    This function executes a SQL query to check if a client exists in the database. If the client does
-    not exist, it is added to the database.
-
-    Parameters:
-        - cursor: The database cursor object.
-        - cod_znje: The client code.
-        - des_znje: The client name.
-
-    Returns:
-        - On success, returns the client ID.
-        - On failure, returns an error message and a status code 500.
-    """
-    cursor.execute(f"SELECT id_cliente FROM cliente WHERE cod_cliente = '{cod_znje}'")
-    id_cliente = cursor.fetchone()
-
-    if id_cliente is None:
-        cursor.execute(
-            "INSERT INTO cliente (cod_cliente, des_cliente) VALUES (%s, %s)",
-            (cod_znje, des_znje),
-        )
-        cursor.execute(
-            "SELECT id_cliente FROM cliente WHERE cod_cliente = %s", (cod_znje,)
-        )
-        id_cliente = cursor.fetchone()
-
-    return id_cliente[0]
-
-
-## CHECK IF PRODUCT EXISTS
-def check_product_exists(
-    cursor,
-    cod_sku,
-    des_sku,
-    porcentaje_proteina,
-    val_formato,
-    familia,
-    grupo_linea,
-    familia_linea,
-):
-    """
-    Checks if product exists in the database.
-
-    This function executes a SQL query to check if a product exists in the database. If the product does
-    not exist, it is added to the database.
-
-    Parameters:
-        - cursor: The database cursor object.
-        - cod_sku: The product code.
-        - des_sku: The product name.
-        - porcentaje_proteina: The product protein percentage.
-        - val_formato: The product format value.
-        - familia: The product family.
-        - grupo_linea: The product line group.
-        - familia_linea: The product family line.
-
-    Returns:
-        - On success, returns the product ID.
-        - On failure, returns an error message and a status code 500.
-    """
-    cursor.execute(f"SELECT id_producto FROM producto WHERE cod_sku = '{cod_sku}'")
-    id_producto = cursor.fetchone()
-
-    if id_producto is None:
-        porcentaje_proteina = float(porcentaje_proteina.replace("%", "")) / 100
-        cursor.execute(
-            f"""
-            INSERT INTO producto (cod_sku, des_sku, porcentaje_proteina, val_formato, familia, grupo_linea, familia_linea) 
-            VALUES ('{cod_sku}', '{des_sku}', '{porcentaje_proteina}', '{val_formato}', '{familia}', '{grupo_linea}', '{familia_linea}')
-        """
-        )
-        cursor.execute(f"SELECT id_producto FROM producto WHERE cod_sku = '{cod_sku}'")
-        id_producto = cursor.fetchone()
-
-    return id_producto[0]
-
-
 ## UPLOAD VENTAS DATA
 def upload_ventas_data(connection, data):
     """
@@ -829,32 +748,24 @@ def upload_ventas_data(connection, data):
         data_ventas = pd.DataFrame(pd.read_excel(data))
         cursor = connection.cursor()
 
+        if any(check_already_uploaded_data(connection, row["FEC_EMISION"], "venta") for _, row in data_ventas.iterrows()):
+            return "Ya existe data para el mes que se desea cargar", 400
+
+        if not all(check_previous_month_data(connection, row["FEC_EMISION"], "venta") for _, row in data_ventas.iterrows()):
+            return "No existe data para el mes anterior", 400
+
         for index, row in data_ventas.iterrows():
-            fecha = datetime.strptime(row["FEC_EMISION"], "%d/%m/%Y")
-
-            if check_already_uploaded_data(connection, fecha, "venta"):
-                return "Ya existe data para el mes que se desea cargar", 400
-
-            if not check_previous_month_data(connection, fecha, "venta"):
-                return "No existe data para el mes anterior", 400
-            
-            id_cliente = check_client_exists(cursor, row["COD_ZNJE"], row["DES_ZNJE"])
-            id_producto = check_product_exists(
-                cursor,
-                row["COD_SKU"],
-                row["DES_SKU"],
-                row["PORC_PROTEINA"],
-                row["VAL_FORMATO"],
-                row["DES_FAMILIA"],
-                row["DES_GRUPO_LINEA"],
-                row["DES_FAMILIA"] + "_" + row["DES_LINEA"],
-            )
-            fecha = fecha.strftime("%Y-%m-%d")
-            toneladas = row["TOT_PESO_FACTURADO"]
+            fecha = row["FEC_EMISION"].strftime("%Y-%m-%d")
+            toneladas = row["TON"]
 
             insert_venta = f"""
                 INSERT INTO venta (id_cliente, id_producto, fecha_emision, toneladas)
-                VALUES ('{id_cliente}', '{id_producto}', '{fecha}', '{toneladas}')
+                VALUES (
+                    (SELECT id_cliente FROM cliente WHERE cod_cliente = '{row['COD_CLIENTE']}'),
+                    (SELECT id_producto FROM producto WHERE cod_sku = '{row['COD_SKU']}'),
+                    '{fecha}',
+                    '{toneladas}'
+                )
             """
             cursor.execute(insert_venta)
 
@@ -885,9 +796,16 @@ def upload_materia_prima_data(connection, data):
         - On failure, returns an error message and a status code 500.
     """
     try:
+        data_materia_prima = pd.DataFrame(pd.read_excel(data))
         cursor = connection.cursor()
 
-        for row in data:
+        if any(check_already_uploaded_data(connection, row["FEC_EMISION"], "materia_prima") for _, row in data_materia_prima.iterrows()):
+            return "Ya existe data para el mes que se desea cargar", 400
+
+        if not all(check_previous_month_data(connection, row["FEC_EMISION"], "materia_prima") for _, row in data_materia_prima.iterrows()):
+            return "No existe data para el mes anterior", 400
+
+        for index, row in data_materia_prima.iterrows():
             cursor.execute(
                 f"""
                 INSERT INTO materia_prima (fecha, total_usd_lecitina, libras_neto_lecitina, total_usd_soya, libras_neto_soya, total_usd_trigo, libras_neto_trigo)
@@ -902,11 +820,12 @@ def upload_materia_prima_data(connection, data):
                 )
             """
             )
-            connection.commit()
 
+        cursor.execute("COMMIT")
         cursor.close()
         return "Data uploaded successfully", 200
     except Exception as e:
+        cursor.execute("ROLLBACK")
         print(traceback.format_exc())
         return "Something went wrong", 500
 
@@ -928,7 +847,14 @@ def upload_precio_camaron_data(connection, data):
         - On failure, returns an error message and a status code 500.
     """
     try:
+        data_precios_camaron = pd.DataFrame(pd.read_excel(data))
         cursor = connection.cursor()
+
+        if any(check_already_uploaded_data(connection, row["FEC_EMISION"], "precio_camaron") for _, row in data_precios_camaron.iterrows()):
+            return "Ya existe data para el mes que se desea cargar", 400
+
+        if not all(check_previous_month_data(connection, row["FEC_EMISION"], "precio_camaron") for _, row in data_precios_camaron.iterrows()):
+            return "No existe data para el mes anterior", 400
 
         for row in data:
             cursor.execute(
@@ -945,11 +871,12 @@ def upload_precio_camaron_data(connection, data):
                 )
             """
             )
-            connection.commit()
-
+        
+        cursor.execute("COMMIT")
         cursor.close()
         return "Data uploaded successfully", 200
     except Exception as e:
+        cursor.execute("ROLLBACK")
         print(traceback.format_exc())
         return "Something went wrong", 500
 
@@ -971,7 +898,14 @@ def upload_exportaciones_data(connection, data):
         - On failure, returns an error message and a status code 500.
     """
     try:
+        data_exportaciones = pd.DataFrame(pd.read_excel(data))
         cursor = connection.cursor()
+
+        if any(check_already_uploaded_data(connection, row["FEC_EMISION"], "exportacion") for _, row in data_exportaciones.iterrows()):
+            return "Ya existe data para el mes que se desea cargar", 400
+
+        if not all(check_previous_month_data(connection, row["FEC_EMISION"], "exportacion") for _, row in data_exportaciones.iterrows()):
+            return "No existe data para el mes anterior", 400
 
         for row in data:
             cursor.execute(
@@ -984,11 +918,12 @@ def upload_exportaciones_data(connection, data):
                 )
             """
             )
-            connection.commit()
 
+        cursor.execute("COMMIT")
         cursor.close()
         return "Data uploaded successfully", 200
     except Exception as e:
+        cursor.execute("ROLLBACK")
         print(traceback.format_exc())
         return "Something went wrong", 500
 
@@ -1011,24 +946,33 @@ def upload_sow_data(connection, data):
     """
     try:
         cursor = connection.cursor()
+        data_sow = pd.DataFrame(pd.read_excel(data))
 
-        for row in data:
+        if any(check_already_uploaded_data(connection, row["FEC_EMISION"], "sow") for _, row in data_sow.iterrows()):
+            return "Ya existe data para el mes que se desea cargar", 400
+
+        if not all(check_previous_month_data(connection, row["FEC_EMISION"], "sow") for _, row in data_sow.iterrows()):
+            return "No existe data para el mes anterior", 400
+
+        for index, row in data_sow.iterrows():
+            fecha = row["FEC_EMISION"].strftime("%Y-%m-%d")
             cursor.execute(
                 f"""
                 INSERT INTO sow (id_cliente, fecha_periodo, potencial_grupo, nicovita, sow_max_alcanzable)
                 VALUES (
-                    (SELECT id_cliente FROM cliente WHERE des_cliente = '{row['Cliente']}'),
-                    '{row['Fecha']}',
-                    {row['Potencial Grupo']},
-                    {row['Nicovita']},
-                    {row['SOW Max Alcanzable']}
+                    (SELECT id_cliente FROM cliente WHERE cod_cliente = '{row['COD_CLIENTE']}'),
+                    '{fecha}',
+                    {row['POTENCIAL_GRUPO']},
+                    {row['NICOVITA']},
+                    {row['SOW_MAX_ALCANZABLE']}
                 )
             """
             )
-            connection.commit()
 
+        cursor.execute("COMMIT")
         cursor.close()
         return "Data uploaded successfully", 200
     except Exception as e:
+        cursor.execute("ROLLBACK")
         print(traceback.format_exc())
         return "Something went wrong", 500
