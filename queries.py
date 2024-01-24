@@ -42,6 +42,7 @@ Usage:
 """
 from datetime import datetime, timedelta
 
+import calendar as cal
 import pandas as pd
 import streamlit as st
 import traceback
@@ -120,8 +121,24 @@ def get_historic(connection, params):
         - On failure, returns an error message and a status code 500.
     """
     try:
-        cursor = connection.cursor()
-        base_query = """
+        year = int(params["year"])
+        month = int(params["month"])
+
+        current_period = datetime(year, month, 1)
+        current_start_date = current_period.strftime("%Y-%m-%d")
+        current_end_date = datetime(
+            year, month, cal.monthrange(year, month)[1]
+        ).strftime("%Y-%m-%d")
+
+        past_period = (current_period - timedelta(days=1)).replace(day=1)
+        past_start_date = past_period.strftime("%Y-%m-%d")
+        past_end_date = datetime(
+            past_period.year,
+            past_period.month,
+            cal.monthrange(past_period.year, past_period.month)[1],
+        ).strftime("%Y-%m-%d")
+
+        current_period_query = f"""
             SELECT 
                 des_cliente as Cliente,
                 des_sku as Producto,
@@ -132,23 +149,24 @@ def get_historic(connection, params):
             FROM venta 
             INNER JOIN cliente ON venta.id_cliente = cliente.id_cliente 
             INNER JOIN producto ON venta.id_producto = producto.id_producto
+            WHERE venta.fecha_emision BETWEEN '{current_start_date}' AND '{current_end_date}'
         """
-        start_date = datetime(int(params["year"]), int(params["month"]), 1).strftime(
-            "%Y-%m-%d"
-        )
 
-        if int(params["month"]) == 12:
-            end_date = datetime(int(params["year"]) + 1, 1, 1).strftime("%Y-%m-%d")
-        else:
-            end_date = datetime(
-                int(params["year"]), int(params["month"]) + 1, 1
-            ).strftime("%Y-%m-%d")
+        past_period_query = f"""
+            SELECT 
+                des_cliente as Cliente,
+                des_sku as Producto,
+                familia as Familia,
+                fecha_emision as Fecha,
+                grupo_linea as Etapa,
+                toneladas as Toneladas
+            FROM venta 
+            INNER JOIN cliente ON venta.id_cliente = cliente.id_cliente 
+            INNER JOIN producto ON venta.id_producto = producto.id_producto
+            WHERE venta.fecha_emision BETWEEN '{past_start_date}' AND '{past_end_date}'
+        """
 
         conditions = []
-
-        conditions.append(
-            f"venta.fecha_emision BETWEEN '{start_date}' AND '{end_date}'"
-        )
 
         if params["stage"] is not None:
             conditions.append(f"producto.grupo_linea = '{params['stage']}'")
@@ -156,19 +174,28 @@ def get_historic(connection, params):
         if params["client"] is not None:
             conditions.append(f"cliente.des_cliente = '{params['client']}'")
 
-        final_query = f"{base_query} WHERE {' AND '.join(conditions)}"
+        final_current_query = f"{current_period_query} {' AND '.join(conditions)}"
+        final_past_query = f"{past_period_query} {' AND '.join(conditions)}"
 
-        cursor.execute(final_query)
-
-        data = cursor.fetchall()
+        cursor = connection.cursor()
+        cursor.execute(final_current_query)
+        data_current = cursor.fetchall()
         columns = [i[0] for i in cursor.description]
         cursor.close()
-
-        formatted_data = [
-            {columns[i]: row[i] for i in range(len(columns))} for row in data
+        formatted_current = [
+            {columns[i]: row[i] for i in range(len(columns))} for row in data_current
         ]
 
-        return formatted_data, 200
+        cursor = connection.cursor()
+        cursor.execute(final_past_query)
+        data_past = cursor.fetchall()
+        columns = [i[0] for i in cursor.description]
+        cursor.close()
+        formatted_past = [
+            {columns[i]: row[i] for i in range(len(columns))} for row in data_past
+        ]
+
+        return formatted_current, formatted_past, 200
     except Exception as e:
         print(traceback.format_exc())
         return "Something went wrong", 500
@@ -229,9 +256,13 @@ def get_prediction_data(_connection, date):
             dataframe_precios_camaron["FECHA"]
         ).dt.strftime("%Y-%m-%d")
 
-        merged_data = pd.merge(merge_ventas_sow, dataframe_exportaciones, on="FECHA", how="left")
+        merged_data = pd.merge(
+            merge_ventas_sow, dataframe_exportaciones, on="FECHA", how="left"
+        )
         merged_data = pd.merge(merged_data, dataframe_mp, on="FECHA", how="left")
-        merged_data = pd.merge(merged_data, dataframe_precios_camaron, on="FECHA", how="left")
+        merged_data = pd.merge(
+            merged_data, dataframe_precios_camaron, on="FECHA", how="left"
+        )
 
         merged_data = merged_data.set_index("FECHA")
         merged_data = merged_data.fillna(0)
@@ -748,10 +779,16 @@ def upload_ventas_data(connection, data):
         data_ventas = pd.DataFrame(pd.read_excel(data))
         cursor = connection.cursor()
 
-        if any(check_already_uploaded_data(connection, row["FEC_EMISION"], "venta") for _, row in data_ventas.iterrows()):
+        if any(
+            check_already_uploaded_data(connection, row["FEC_EMISION"], "venta")
+            for _, row in data_ventas.iterrows()
+        ):
             return "Ya existe data para el mes que se desea cargar", 400
 
-        if not all(check_previous_month_data(connection, row["FEC_EMISION"], "venta") for _, row in data_ventas.iterrows()):
+        if not all(
+            check_previous_month_data(connection, row["FEC_EMISION"], "venta")
+            for _, row in data_ventas.iterrows()
+        ):
             return "No existe data para el mes anterior", 400
 
         for index, row in data_ventas.iterrows():
@@ -799,10 +836,16 @@ def upload_materia_prima_data(connection, data):
         data_materia_prima = pd.DataFrame(pd.read_excel(data))
         cursor = connection.cursor()
 
-        if any(check_already_uploaded_data(connection, row["FEC_EMISION"], "materia_prima") for _, row in data_materia_prima.iterrows()):
+        if any(
+            check_already_uploaded_data(connection, row["FEC_EMISION"], "materia_prima")
+            for _, row in data_materia_prima.iterrows()
+        ):
             return "Ya existe data para el mes que se desea cargar", 400
 
-        if not all(check_previous_month_data(connection, row["FEC_EMISION"], "materia_prima") for _, row in data_materia_prima.iterrows()):
+        if not all(
+            check_previous_month_data(connection, row["FEC_EMISION"], "materia_prima")
+            for _, row in data_materia_prima.iterrows()
+        ):
             return "No existe data para el mes anterior", 400
 
         for index, row in data_materia_prima.iterrows():
@@ -850,10 +893,18 @@ def upload_precio_camaron_data(connection, data):
         data_precios_camaron = pd.DataFrame(pd.read_excel(data))
         cursor = connection.cursor()
 
-        if any(check_already_uploaded_data(connection, row["FEC_EMISION"], "precio_camaron") for _, row in data_precios_camaron.iterrows()):
+        if any(
+            check_already_uploaded_data(
+                connection, row["FEC_EMISION"], "precio_camaron"
+            )
+            for _, row in data_precios_camaron.iterrows()
+        ):
             return "Ya existe data para el mes que se desea cargar", 400
 
-        if not all(check_previous_month_data(connection, row["FEC_EMISION"], "precio_camaron") for _, row in data_precios_camaron.iterrows()):
+        if not all(
+            check_previous_month_data(connection, row["FEC_EMISION"], "precio_camaron")
+            for _, row in data_precios_camaron.iterrows()
+        ):
             return "No existe data para el mes anterior", 400
 
         for row in data:
@@ -871,7 +922,7 @@ def upload_precio_camaron_data(connection, data):
                 )
             """
             )
-        
+
         cursor.execute("COMMIT")
         cursor.close()
         return "Data uploaded successfully", 200
@@ -901,10 +952,16 @@ def upload_exportaciones_data(connection, data):
         data_exportaciones = pd.DataFrame(pd.read_excel(data))
         cursor = connection.cursor()
 
-        if any(check_already_uploaded_data(connection, row["FEC_EMISION"], "exportacion") for _, row in data_exportaciones.iterrows()):
+        if any(
+            check_already_uploaded_data(connection, row["FEC_EMISION"], "exportacion")
+            for _, row in data_exportaciones.iterrows()
+        ):
             return "Ya existe data para el mes que se desea cargar", 400
 
-        if not all(check_previous_month_data(connection, row["FEC_EMISION"], "exportacion") for _, row in data_exportaciones.iterrows()):
+        if not all(
+            check_previous_month_data(connection, row["FEC_EMISION"], "exportacion")
+            for _, row in data_exportaciones.iterrows()
+        ):
             return "No existe data para el mes anterior", 400
 
         for row in data:
@@ -948,10 +1005,16 @@ def upload_sow_data(connection, data):
         cursor = connection.cursor()
         data_sow = pd.DataFrame(pd.read_excel(data))
 
-        if any(check_already_uploaded_data(connection, row["FEC_EMISION"], "sow") for _, row in data_sow.iterrows()):
+        if any(
+            check_already_uploaded_data(connection, row["FEC_EMISION"], "sow")
+            for _, row in data_sow.iterrows()
+        ):
             return "Ya existe data para el mes que se desea cargar", 400
 
-        if not all(check_previous_month_data(connection, row["FEC_EMISION"], "sow") for _, row in data_sow.iterrows()):
+        if not all(
+            check_previous_month_data(connection, row["FEC_EMISION"], "sow")
+            for _, row in data_sow.iterrows()
+        ):
             return "No existe data para el mes anterior", 400
 
         for index, row in data_sow.iterrows():

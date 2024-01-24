@@ -9,3 +9,7 @@ div[data-testid="stHorizontalBlock"]:nth-of-type(8){
 .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
     font-size: 1.5rem;
 }
+
+div[data-testid="stSidebarUserContent"] > div[data-testid="block-container"] {
+    padding: 0rem 0rem 0rem 0rem;
+}
