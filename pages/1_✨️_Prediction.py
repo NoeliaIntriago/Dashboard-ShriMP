@@ -38,10 +38,12 @@ from datetime import timedelta
 from keras.models import load_model
 from PIL import Image
 from queries import get_clients, get_min_max_date, get_prediction_data
+from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import MinMaxScaler
 
 import altair as alt
 import io
+import json
 import mysql.connector
 import os
 import pandas as pd
@@ -62,243 +64,38 @@ mysql = mysql.connector.connect(
 )
 model = load_model(path + "/../model/model_lstm_all_76_8.h5")
 
+with open(path + "/../columns_data.json", "r") as f:
+    data = json.load(f)
+
+columns_out = data["columns_out"]
+columns_order = data["columns_order"]
+columns_promedio = data["columns_promedio"]
+
 
 @st.cache_data
 def predict(result):
     """
     Predicts the production of shrimp feed for the next 4 weeks using a pre-trained model.
 
-    This function processes the input data 'result' which includes historical production data. 
-    It performs data resampling, flattening, and scaling to prepare the data for prediction. 
-    The prediction is made using a pre-trained machine learning model and then the output is 
+    This function processes the input data 'result' which includes historical production data.
+    It performs data resampling, flattening, and scaling to prepare the data for prediction.
+    The prediction is made using a pre-trained machine learning model and then the output is
     inversely transformed to the original scale.
 
-    The function handles specific data columns for input and output data, aggregation for 
+    The function handles specific data columns for input and output data, aggregation for
     resampling, and scaling for machine learning model prediction.
 
     Parameters:
         - result: A tuple where the first element is a DataFrame containing historical production data.
 
     Returns:
-        - A tuple containing:
-            1. The prediction of shrimp feed production for the next 4 weeks.
-            2. The columns relevant to the output data.
+        - A numpy array containing the predicted production data for the next 4 weeks.
 
     Notes:
         - The function assumes specific column names and structure in the 'result' DataFrame.
         - It uses MinMaxScaler for scaling the input and output data.
         - The machine learning model used for prediction should be predefined as 'model'.
     """
-    columns_order = [
-        "AUR_SEEDING_1",
-        "AUR_VOLUMA_1",
-        "TAR_SEEDING_1",
-        "JIN_SEEDING_1",
-        "ZEP_VOLUMA_1",
-        "JIN_VOLUMA_1",
-        "VEX_VOLUMA_1",
-        "NYX_SEEDING_1",
-        "NYX_VOLUMA_1",
-        "LEX_VOLUMA_1",
-        "NICOVITA_1",
-        "POTENCIAL_GRUPO_1",
-        "SOW_MAX_ALCANZABLE_1",
-        "AUR_SEEDING_2",
-        "AUR_VOLUMA_2",
-        "TAR_SEEDING_2",
-        "JIN_SEEDING_2",
-        "ZEP_VOLUMA_2",
-        "JIN_VOLUMA_2",
-        "VEX_VOLUMA_2",
-        "NYX_SEEDING_2",
-        "NYX_VOLUMA_2",
-        "LEX_VOLUMA_2",
-        "NICOVITA_2",
-        "POTENCIAL_GRUPO_2",
-        "SOW_MAX_ALCANZABLE_2",
-        "AUR_SEEDING_3",
-        "AUR_VOLUMA_3",
-        "TAR_SEEDING_3",
-        "JIN_SEEDING_3",
-        "ZEP_VOLUMA_3",
-        "JIN_VOLUMA_3",
-        "VEX_VOLUMA_3",
-        "NYX_SEEDING_3",
-        "NYX_VOLUMA_3",
-        "LEX_VOLUMA_3",
-        "NICOVITA_3",
-        "POTENCIAL_GRUPO_3",
-        "SOW_MAX_ALCANZABLE_3",
-        "AUR_SEEDING_4",
-        "AUR_VOLUMA_4",
-        "TAR_SEEDING_4",
-        "JIN_SEEDING_4",
-        "ZEP_VOLUMA_4",
-        "JIN_VOLUMA_4",
-        "VEX_VOLUMA_4",
-        "NYX_SEEDING_4",
-        "NYX_VOLUMA_4",
-        "LEX_VOLUMA_4",
-        "NICOVITA_4",
-        "POTENCIAL_GRUPO_4",
-        "SOW_MAX_ALCANZABLE_4",
-        "AUR_SEEDING_5",
-        "AUR_VOLUMA_5",
-        "TAR_SEEDING_5",
-        "JIN_SEEDING_5",
-        "ZEP_VOLUMA_5",
-        "JIN_VOLUMA_5",
-        "VEX_VOLUMA_5",
-        "NYX_SEEDING_5",
-        "NYX_VOLUMA_5",
-        "LEX_VOLUMA_5",
-        "NICOVITA_5",
-        "POTENCIAL_GRUPO_5",
-        "SOW_MAX_ALCANZABLE_5",
-        "AUR_SEEDING_6",
-        "AUR_VOLUMA_6",
-        "TAR_SEEDING_6",
-        "JIN_SEEDING_6",
-        "ZEP_VOLUMA_6",
-        "JIN_VOLUMA_6",
-        "VEX_VOLUMA_6",
-        "NYX_SEEDING_6",
-        "NYX_VOLUMA_6",
-        "LEX_VOLUMA_6",
-        "NICOVITA_6",
-        "POTENCIAL_GRUPO_6",
-        "SOW_MAX_ALCANZABLE_6",
-        "AUR_SEEDING_7",
-        "AUR_VOLUMA_7",
-        "TAR_SEEDING_7",
-        "JIN_SEEDING_7",
-        "ZEP_VOLUMA_7",
-        "JIN_VOLUMA_7",
-        "VEX_VOLUMA_7",
-        "NYX_SEEDING_7",
-        "NYX_VOLUMA_7",
-        "LEX_VOLUMA_7",
-        "NICOVITA_7",
-        "POTENCIAL_GRUPO_7",
-        "SOW_MAX_ALCANZABLE_7",
-        "TOTAL_LB",
-        "TOTAL_FOB",
-        "30-40 (29 g)",
-        "40-50 (23 g)",
-        "50-60 (18 g)",
-        "60-70 (15 g)",
-        "70-80 (13 g)",
-        "80-100 (11 g)",
-        "TOTAL_USD_LECITINA",
-        "LIBRAS_NETO_LECITINA",
-        "TOTAL_USD_SOYA",
-        "LIBRAS_NETO_SOYA",
-        "TOTAL_USD_TRIGO",
-        "LIBRAS_NETO_TRIGO",
-    ]
-
-    columns_out = [
-        "AUR_SEEDING_1",
-        "AUR_VOLUMA_1",
-        "TAR_SEEDING_1",
-        "JIN_SEEDING_1",
-        "ZEP_VOLUMA_1",
-        "JIN_VOLUMA_1",
-        "VEX_VOLUMA_1",
-        "NYX_SEEDING_1",
-        "NYX_VOLUMA_1",
-        "LEX_VOLUMA_1",
-        "AUR_SEEDING_2",
-        "AUR_VOLUMA_2",
-        "TAR_SEEDING_2",
-        "JIN_SEEDING_2",
-        "ZEP_VOLUMA_2",
-        "JIN_VOLUMA_2",
-        "VEX_VOLUMA_2",
-        "NYX_SEEDING_2",
-        "NYX_VOLUMA_2",
-        "LEX_VOLUMA_2",
-        "AUR_SEEDING_3",
-        "AUR_VOLUMA_3",
-        "TAR_SEEDING_3",
-        "JIN_SEEDING_3",
-        "ZEP_VOLUMA_3",
-        "JIN_VOLUMA_3",
-        "VEX_VOLUMA_3",
-        "NYX_SEEDING_3",
-        "NYX_VOLUMA_3",
-        "LEX_VOLUMA_3",
-        "AUR_SEEDING_4",
-        "AUR_VOLUMA_4",
-        "TAR_SEEDING_4",
-        "JIN_SEEDING_4",
-        "ZEP_VOLUMA_4",
-        "JIN_VOLUMA_4",
-        "VEX_VOLUMA_4",
-        "NYX_SEEDING_4",
-        "NYX_VOLUMA_4",
-        "LEX_VOLUMA_4",
-        "AUR_SEEDING_5",
-        "AUR_VOLUMA_5",
-        "TAR_SEEDING_5",
-        "JIN_SEEDING_5",
-        "ZEP_VOLUMA_5",
-        "JIN_VOLUMA_5",
-        "VEX_VOLUMA_5",
-        "NYX_SEEDING_5",
-        "NYX_VOLUMA_5",
-        "LEX_VOLUMA_5",
-        "AUR_SEEDING_6",
-        "AUR_VOLUMA_6",
-        "TAR_SEEDING_6",
-        "JIN_SEEDING_6",
-        "ZEP_VOLUMA_6",
-        "JIN_VOLUMA_6",
-        "VEX_VOLUMA_6",
-        "NYX_SEEDING_6",
-        "NYX_VOLUMA_6",
-        "LEX_VOLUMA_6",
-        "AUR_SEEDING_7",
-        "AUR_VOLUMA_7",
-        "TAR_SEEDING_7",
-        "JIN_SEEDING_7",
-        "ZEP_VOLUMA_7",
-        "JIN_VOLUMA_7",
-        "VEX_VOLUMA_7",
-        "NYX_SEEDING_7",
-        "NYX_VOLUMA_7",
-        "LEX_VOLUMA_7",
-    ]
-
-    columns_promedio = [
-        "30-40 (29 g)",
-        "40-50 (23 g)",
-        "50-60 (18 g)",
-        "60-70 (15 g)",
-        "70-80 (13 g)",
-        "80-100 (11 g)",
-        "NICOVITA_1",
-        "POTENCIAL_GRUPO_1",
-        "SOW_MAX_ALCANZABLE_1",
-        "NICOVITA_2",
-        "POTENCIAL_GRUPO_2",
-        "SOW_MAX_ALCANZABLE_2",
-        "NICOVITA_3",
-        "POTENCIAL_GRUPO_3",
-        "SOW_MAX_ALCANZABLE_3",
-        "NICOVITA_4",
-        "POTENCIAL_GRUPO_4",
-        "SOW_MAX_ALCANZABLE_4",
-        "NICOVITA_5",
-        "POTENCIAL_GRUPO_5",
-        "SOW_MAX_ALCANZABLE_5",
-        "NICOVITA_6",
-        "POTENCIAL_GRUPO_6",
-        "SOW_MAX_ALCANZABLE_6",
-        "NICOVITA_7",
-        "POTENCIAL_GRUPO_7",
-        "SOW_MAX_ALCANZABLE_7",
-    ]
     agregaciones = {
         col: "mean" if col in columns_promedio else "sum" for col in columns_order
     }
@@ -354,7 +151,147 @@ def predict(result):
     prediction_reshaped = prediction.reshape(n_samples, n_weeks * n_features)
     prediction = scaler_out.inverse_transform(prediction_reshaped)
 
-    return prediction, columns_out
+    return prediction
+
+
+def process_display_data(model_prediction, date):
+    """
+    Processes and displays shrimp feed production prediction data for a specified date.
+
+    This function retrieves prediction data based on the provided date, applies the predictive model,
+    and then processes and visualizes the predicted data for the next four weeks. It splits the model's
+    prediction into weekly segments, creates dataframes for each week using `build_week_dataframes`,
+    and displays charts for each week using `build_week_charts`.
+
+    Parameters:
+        - model_prediction: A numpy array containing the predicted production data for the next 4 weeks.
+        - date: A datetime object representing the date for which the predictions are to be made.
+
+    Returns:
+        - A tuple of DataFrames for each of the four weeks containing the processed prediction data.
+
+    Notes:
+        - The function assumes a specific structure and naming convention of the columns in the prediction data.
+        - Relies on `get_prediction_data`, `predict`, `build_week_dataframes`, and `build_week_charts` functions to fetch, predict, process, and visualize data respectively.
+        - If no prediction data is available for the given date, the function will not perform any further actions.
+    """
+    dates = [
+        date,
+        date + timedelta(weeks=1),
+        date + timedelta(weeks=2),
+        date + timedelta(weeks=3),
+    ]
+    week1 = pd.DataFrame(model_prediction[0][0:70]).T
+    week1.columns = columns_out
+
+    week2 = pd.DataFrame(model_prediction[0][70:140]).T
+    week2.columns = columns_out
+
+    week3 = pd.DataFrame(model_prediction[0][140:210]).T
+    week3.columns = columns_out
+
+    week4 = pd.DataFrame(model_prediction[0][210:280]).T
+    week4.columns = columns_out
+
+    weekly_summary = build_weekly_summary(week1, week2, week3, week4, dates)
+    build_charts(
+        weekly_summary,
+        "Predicción de producción de balanceado de camarón para las próximas 4 semanas",
+    )
+
+    week1 = build_week_dataframes(week1)
+    week2 = build_week_dataframes(week2)
+    week3 = build_week_dataframes(week3)
+    week4 = build_week_dataframes(week4)
+
+    seeding_weekly_df = build_line_group_dataframes(
+        week1, week2, week3, week4, dates, "SEEDING"
+    )
+    voluma_weekly_df = build_line_group_dataframes(
+        week1, week2, week3, week4, dates, "VOLUMA"
+    )
+
+    st.divider()
+    col1, col2 = st.columns([1, 1], gap="large")
+    with col1:
+        build_charts(
+            seeding_weekly_df,
+            "Predicción de producción de balanceado de camarón para el grupo de líneas SEEDING",
+        )
+
+    with col2:
+        build_charts(
+            voluma_weekly_df,
+            "Predicción de producción de balanceado de camarón para el grupo de líneas VOLUMA",
+        )
+
+    return week1, week2, week3, week4
+
+
+@st.cache_data
+def build_weekly_summary(w1, w2, w3, w4, dates):
+    """
+    Builds a global DataFrame with the predicted production data for the next four weeks.
+
+    This function takes the four DataFrames for each week and concatenates them into a single DataFrame.
+    It also adds a column for the week number to the DataFrame.
+
+    Parameters:
+        - w1, w2, w3, w4: DataFrames for weeks 1, 2, 3, and 4, respectively.
+
+    Returns:
+        - A DataFrame containing the predicted production data for the next four weeks.
+
+    Notes:
+        - Assumes a specific format for the input DataFrames.
+    """
+    total_week1 = w1.sum(axis=1).values[0]
+    total_week2 = w2.sum(axis=1).values[0]
+    total_week3 = w3.sum(axis=1).values[0]
+    total_week4 = w4.sum(axis=1).values[0]
+
+    df = pd.DataFrame(
+        {
+            "Semana": [1, 2, 3, 4],
+            "Fecha": dates,
+            "Total": [total_week1, total_week2, total_week3, total_week4],
+        }
+    )
+
+    return df
+
+
+@st.cache_data
+def build_line_group_dataframes(w1, w2, w3, w4, dates, line_group):
+    """
+    Builds a DataFrame containing the total production for a given product-stage.
+
+    This function takes the four DataFrames for each week and concatenates them into a single DataFrame.
+    It also adds a column for the week number to the DataFrame.
+
+    Parameters:
+        - w1, w2, w3, w4: DataFrames for weeks 1, 2, 3, and 4, respectively.
+        - dates: A list of dates for each week.
+        - line_group: A string representing the product-stage for which the total production is to be calculated.
+
+    Returns:
+        - A DataFrame containing the total production for the given product-stage for each week.
+
+    Notes:
+        - Assumes a specific format for the input DataFrames.
+    """
+    week_dataframes = [w1, w2, w3, w4]
+    week_totals = []
+
+    for week_df, date in zip(week_dataframes, dates):
+        group_columns = [col for col in week_df.columns if line_group in col]
+        week_total = week_df[group_columns].sum(axis=1).iloc[0]
+        week_totals.append([date, week_total])
+
+    df = pd.DataFrame(week_totals, columns=["Fecha", "Total"])
+    df["Semana"] = range(1, len(week_dataframes) + 1)
+
+    return df
 
 
 @st.cache_data
@@ -362,7 +299,7 @@ def build_week_dataframes(df):
     """
     Builds a pivot DataFrame for each week from the provided DataFrame.
 
-    This function melts the original DataFrame to long format and then creates a pivot table. It extracts 
+    This function melts the original DataFrame to long format and then creates a pivot table. It extracts
     client and product-stage information from the column names and maps client IDs to their names.
 
     Parameters:
@@ -392,35 +329,48 @@ def build_week_dataframes(df):
     return df_pivot
 
 
-def build_week_charts(df, num_week):
+def build_charts(df, title):
     """
-    Generates and displays a line chart for the given DataFrame and week number using Streamlit and Altair.
+    Builds a line chart for the provided DataFrame.
 
-    This function melts the DataFrame to long format for charting. It then creates a line chart showing 
-    values per client and product-stage, displaying it on the Streamlit dashboard.
+    This function takes a DataFrame and generates a line chart using the 'Fecha' column as the x-axis
+    and the 'Total' column as the y-axis. It also sets the x-axis labels to the 'Fecha' column values.
 
     Parameters:
-    - df: DataFrame with 'CLIENTE' as rows and 'PRODUCTO_ETAPA' as columns.
-    - num_week: The week number for which the chart is being generated.
+        - df: DataFrame containing the data to be plotted.
+        - title: A string representing the title of the chart.
 
     Side Effects:
-    - Renders a line chart to the Streamlit dashboard using Altair.
+        - Displays an interactive line chart on the Streamlit dashboard.
     """
-    df_pivot = df.melt(
-        id_vars=["CLIENTE"], var_name="PRODUCTO_ETAPA", value_name="VALOR"
-    )
+    chart_color = "#F84718"
+    line_opacity = 0.8
+    line_size = 3
+    point_size = 50
+
+    df["Fecha"] = df["Fecha"].astype(str)
+    x_axis_labels = df["Fecha"].tolist()
 
     st.altair_chart(
-        alt.Chart(df_pivot)
-        .mark_line(point=True)
+        alt.Chart(df)
+        .mark_line(color=chart_color, opacity=line_opacity, size=line_size, filled=True)
         .encode(
-            x=alt.X("CLIENTE:N", sort=None, title="Cliente"),
-            y=alt.Y("VALOR:Q", title="Toneladas"),
-            color=alt.Color("PRODUCTO_ETAPA:N", legend=alt.Legend(title="Producto")),
+            x=alt.X(
+                "Fecha",
+                sort=None,
+                title="Semana",
+                axis=alt.Axis(values=x_axis_labels, labelAngle=-45),
+            ),
+            y=alt.Y("Total:Q", title="Toneladas"),
         )
-        .properties(
-            title=f"Predicción de producción de balanceado de camarón para la semana {num_week}"
-        ),
+        .properties(title=title)
+        + alt.Chart(df)
+        .mark_point(
+            color=chart_color,
+            size=point_size,
+            filled=True,
+        )
+        .encode(x="Fecha", y="Total:Q"),
         use_container_width=True,
     )
 
@@ -429,9 +379,8 @@ def write_excel(df1, df2, df3, df4, date):
     """
     Writes multiple DataFrames to an Excel file and returns the file as a byte stream.
 
-    The function takes four DataFrames corresponding to four weeks of data and a start date. It writes 
-    each DataFrame to a separate sheet in an Excel file, naming the sheets based on the week number and 
-    the provided date.
+    The function takes four DataFrames corresponding to four weeks of data and a start date. It writes
+    each DataFrame each DataFrame in an Excel file separated by week.
 
     Parameters:
         - df1, df2, df3, df4: DataFrames for weeks 1, 2, 3, and 4, respectively.
@@ -445,74 +394,48 @@ def write_excel(df1, df2, df3, df4, date):
         - openpyxl
     """
     output = io.BytesIO()
+
+    df1.insert(0, "Semana", f"Semana 1 ({date.strftime('%Y-%m-%d')})")
+    df2.insert(
+        0, "Semana", f"Semana 2 ({(date + timedelta(weeks=1)).strftime('%Y-%m-%d')})"
+    )
+    df3.insert(
+        0, "Semana", f"Semana 3 ({(date + timedelta(weeks=2)).strftime('%Y-%m-%d')})"
+    )
+    df4.insert(
+        0, "Semana", f"Semana 4 ({(date + timedelta(weeks=3)).strftime('%Y-%m-%d')})"
+    )
+
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df1.to_excel(writer, sheet_name=f"Semana 1 ({date})")
-        df2.to_excel(writer, sheet_name=f"Semana 2 ({date + timedelta(weeks=1)})")
-        df3.to_excel(writer, sheet_name=f"Semana 3 ({date + timedelta(weeks=2)})")
-        df4.to_excel(writer, sheet_name=f"Semana 4 ({date + timedelta(weeks=3)})")
+        df1.to_excel(writer, sheet_name="Semanas", startrow=0, index=False)
+
+        startrow = len(df1) + 2
+
+        for i, df in enumerate([df2, df3, df4], start=1):
+            df.to_excel(
+                writer,
+                sheet_name="Semanas",
+                startrow=startrow,
+                header=False,
+                index=False,
+            )
+            startrow += len(df) + 1
 
     processed_data = output.getvalue()
     return processed_data
-
-
-def process_display_data(date):
-    """
-    Processes and displays shrimp feed production prediction data for a specified date.
-
-    This function retrieves prediction data based on the provided date, applies the predictive model, 
-    and then processes and visualizes the predicted data for the next four weeks. It splits the model's 
-    prediction into weekly segments, creates dataframes for each week using `build_week_dataframes`, 
-    and displays charts for each week using `build_week_charts`.
-
-    Parameters:
-        - date: A datetime object representing the date for which the predictions are to be made.
-
-    Returns:
-        - A tuple of DataFrames for each of the four weeks containing the processed prediction data.
-
-    Notes:
-        - The function assumes a specific structure and naming convention of the columns in the prediction data.
-        - Relies on `get_prediction_data`, `predict`, `build_week_dataframes`, and `build_week_charts` functions to fetch, predict, process, and visualize data respectively.
-        - If no prediction data is available for the given date, the function will not perform any further actions.
-    """
-    prediction_data = get_prediction_data(_connection=mysql, date=date)
-    if prediction_data is not None:
-        model_prediction, columns_out = predict(prediction_data)
-
-        week1 = pd.DataFrame(model_prediction[0][0:70]).T
-        week1.columns = columns_out
-        week1 = build_week_dataframes(week1)
-        build_week_charts(week1, 1)
-
-        week2 = pd.DataFrame(model_prediction[0][70:140]).T
-        week2.columns = columns_out
-        week2 = build_week_dataframes(week2)
-        build_week_charts(week2, 2)
-
-        week3 = pd.DataFrame(model_prediction[0][140:210]).T
-        week3.columns = columns_out
-        week3 = build_week_dataframes(week3)
-        build_week_charts(week3, 3)
-
-        week4 = pd.DataFrame(model_prediction[0][210:280]).T
-        week4.columns = columns_out
-        week4 = build_week_dataframes(week4)
-        build_week_charts(week4, 4)
-
-        return week1, week2, week3, week4
 
 
 def main():
     """
     Main function for the ShriMP Prediction Streamlit dashboard.
 
-    This function sets up the Streamlit page configuration and styles, displays a logo, and explains 
-    the functionality of the dashboard. It includes a date input form for the user to select a date 
-    for shrimp feed production prediction. Upon form submission, it processes the selected date, 
-    displays the predicted production for the next four weeks, and provides an option to download 
+    This function sets up the Streamlit page configuration and styles, displays a logo, and explains
+    the functionality of the dashboard. It includes a date input form for the user to select a date
+    for shrimp feed production prediction. Upon form submission, it processes the selected date,
+    displays the predicted production for the next four weeks, and provides an option to download
     this data as an Excel report.
 
-    The function integrates various components like database querying for date range, data processing 
+    The function integrates various components like database querying for date range, data processing
     for predictions, and data visualization.
 
     Side Effects:
@@ -573,9 +496,9 @@ def main():
             st.session_state.predicted_date = date
 
     if "predicted_date" in st.session_state and date is not None:
-        week1, week2, week3, week4 = process_display_data(
-            st.session_state.predicted_date
-        )
+        prediction_input = get_prediction_data(_connection=mysql, date=date)
+        model_prediction = predict(prediction_input)
+        week1, week2, week3, week4 = process_display_data(model_prediction, date)
 
         excel = write_excel(week1, week2, week3, week4, date)
         col2.download_button(
