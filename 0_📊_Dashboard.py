@@ -71,16 +71,18 @@ def build_hierarchical_dataframe(df, levels, value_column):
         if i < len(levels) - 1:
             df_tree["parent"] = dfg[levels[i + 1]].copy()
         else:
-            df_tree["parent"] = "Cliente"
+            df_tree["parent"] = "Clientes"
         df_tree["value"] = dfg[value_column]
+        df_tree = df_tree.fillna(0)
         df_all_trees = pd.concat([df_all_trees, df_tree], ignore_index=True)
     total = pd.Series(
         dict(
-            id="Cliente",
+            id="Clientes",
             parent="",
             value=df[value_column].sum(),
         )
     )
+    df_all_trees = df_all_trees.fillna(0)
     df_all_trees = pd.concat([df_all_trees, pd.DataFrame([total])], ignore_index=True)
     return df_all_trees
 
@@ -241,8 +243,7 @@ def draw_results(input_data):
             dataframe_tree = build_hierarchical_dataframe(
                 dataframe_clientes, level_columns, value_column
             )
-
-            st.write(dataframe_tree)
+            average_value = dataframe_tree["value"].mean()
 
             fig = go.Figure()
             fig.add_trace(
@@ -252,15 +253,15 @@ def draw_results(input_data):
                     values=dataframe_tree["value"],
                     branchvalues="total",
                     marker=dict(
-                        colorscale="RdBu",
-                        cmid=0.5,
+                        colorscale="ice",
+                        cmid=average_value,
                     ),
-                    hovertemplate="<b>%{label} </b> <br> Toneladas: %{value}<br> Padre: %{parent}",
+                    hovertemplate="<b>%{label} </b> <br> Toneladas: %{value}",
                     name="",
                 )
             )
 
-            fig.update_layout(margin=dict(t=0, b=0, r=0, l=0))
+            fig.update_layout(margin=dict(t=10, b=10, r=10, l=10))
             st.plotly_chart(fig, use_container_width=True)
 
         # DATAFRAME DETALLE DE VENTAS
