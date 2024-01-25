@@ -37,6 +37,7 @@ import altair as alt
 import os
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 import streamlit as st
 import toml
 import mysql.connector
@@ -53,38 +54,6 @@ PORT = toml_data["mysql"]["port"]
 mysql = mysql.connector.connect(
     host=HOST, database=DATABASE, user=USER, password=PASSWORD, port=PORT
 )
-
-
-def build_hierarchical_dataframe(df, levels, value_column):
-    """
-    Build a hierarchy of levels for Sunburst or Treemap charts.
-
-    Levels are given starting from the bottom to the top of the hierarchy,
-    ie the last level corresponds to the root.
-    """
-    df_all_trees = pd.DataFrame(columns=["id", "parent", "value"])
-    for i, level in enumerate(levels):
-        df_tree = pd.DataFrame(columns=["id", "parent", "value"])
-        dfg = df.groupby(levels[i:]).sum()
-        dfg = dfg.reset_index()
-        df_tree["id"] = dfg[level].copy()
-        if i < len(levels) - 1:
-            df_tree["parent"] = dfg[levels[i + 1]].copy()
-        else:
-            df_tree["parent"] = "Clientes"
-        df_tree["value"] = dfg[value_column]
-        df_tree = df_tree.fillna(0)
-        df_all_trees = pd.concat([df_all_trees, df_tree], ignore_index=True)
-    total = pd.Series(
-        dict(
-            id="Clientes",
-            parent="",
-            value=df[value_column].sum(),
-        )
-    )
-    df_all_trees = df_all_trees.fillna(0)
-    df_all_trees = pd.concat([df_all_trees, pd.DataFrame([total])], ignore_index=True)
-    return df_all_trees
 
 
 def draw_results(input_data):
@@ -237,31 +206,19 @@ def draw_results(input_data):
                 .reset_index()
                 .sort_values(by="Toneladas", ascending=False)
             )
-            level_columns = ["Producto", "Cliente"]
-            value_column = "Toneladas"
-
-            dataframe_tree = build_hierarchical_dataframe(
-                dataframe_clientes, level_columns, value_column
-            )
-            average_value = dataframe_tree["value"].mean()
 
             fig = go.Figure()
-            fig.add_trace(
-                go.Sunburst(
-                    labels=dataframe_tree["id"],
-                    parents=dataframe_tree["parent"],
-                    values=dataframe_tree["value"],
-                    branchvalues="total",
-                    marker=dict(
-                        colorscale="ice",
-                        cmid=average_value,
-                    ),
-                    hovertemplate="<b>%{label} </b> <br> Toneladas: %{value}",
-                    name="",
-                )
+            fig = px.sunburst(
+                data_frame=dataframe_clientes,
+                path=["Cliente", "Producto"],
+                values="Toneladas",
+                color_discrete_sequence= px.colors.qualitative.Dark2,
+                color="Toneladas",
+                custom_data=["Toneladas", "Cliente", "Producto"],
             )
 
-            fig.update_layout(margin=dict(t=10, b=10, r=10, l=10))
+            fig.update_traces(hovertemplate="<b>%{customdata[1]}/%{customdata[2]}</b> <br> Toneladas: %{customdata[0]:.2f} Ton")
+            fig.update_layout(margin=dict(t=25, b=25, r=25, l=25))
             st.plotly_chart(fig, use_container_width=True)
 
         # DATAFRAME DETALLE DE VENTAS

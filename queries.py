@@ -174,11 +174,12 @@ def get_historic(connection, params):
         if params["client"] is not None:
             conditions.append(f"cliente.des_cliente = '{params['client']}'")
 
-        final_current_query = f"{current_period_query} {' AND '.join(conditions)}"
-        final_past_query = f"{past_period_query} {' AND '.join(conditions)}"
+        if len(conditions) > 0:
+            current_period_query += " AND " + " AND ".join(conditions)
+            past_period_query += " AND " + " AND ".join(conditions)
 
         cursor = connection.cursor()
-        cursor.execute(final_current_query)
+        cursor.execute(current_period_query)
         data_current = cursor.fetchall()
         columns = [i[0] for i in cursor.description]
         cursor.close()
@@ -187,7 +188,7 @@ def get_historic(connection, params):
         ]
 
         cursor = connection.cursor()
-        cursor.execute(final_past_query)
+        cursor.execute(past_period_query)
         data_past = cursor.fetchall()
         columns = [i[0] for i in cursor.description]
         cursor.close()
