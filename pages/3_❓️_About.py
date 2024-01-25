@@ -73,7 +73,7 @@ def main():
 
     st.write(
         """
-        ShriMP fue desarrollado como parte del proyecto de titulación de la carrera de Ingeniería en Computación de la Escuela Superior Politécnica del Litoral en Guayaquil, Ecuador.
+        ShriMP fue desarrollado como parte del proyecto de titulación de la carrera de Ingeniería en Computación de la Escuela Superior Politécnica del Litoral ESPOL® en Guayaquil, Ecuador.
     """
     )
 
